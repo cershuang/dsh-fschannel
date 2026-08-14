@@ -42,7 +42,7 @@ const ctx = {
   effect(fn, label) { fn(); return () => {} },
   on() { return () => {} },
   off() {},
-  locale: { register(ns, dict) { console.log('locale registered:', ns, Object.keys(dict.zh).length, 'zh keys') } },
+  locale: { register(ns, dict) { console.log('locale registered:', ns, Object.keys(dict.zh).length, 'zh keys') }, bind: () => () => 'Feishu Bot' },
   sessions: {
     list: {
       getSnapshot: () => ({ byId: {} }),
@@ -60,10 +60,11 @@ const ctx = {
 exportsObj.apply(ctx)
 const names = registered.map((o) => o.name).join(',')
 console.log('registered slots:', names)
-if (!names.includes('conversation.session.header.actions') || !names.includes('settings.general.item')) {
+if (!names.includes('conversation.session.header.actions') || !names.includes('settings.section')) {
   throw new Error('slot registration missing')
 }
-const settingsOpts = registered.find((o) => o.name === 'settings.general.item')
+const settingsOpts = registered.find((o) => o.name === 'settings.section')
+if (typeof settingsOpts.label !== 'function') throw new Error('section label missing')
 const injected = settingsOpts.inject()
 if (typeof injected.createSession !== 'function') throw new Error('createSession prop missing')
 await injected.createSession()

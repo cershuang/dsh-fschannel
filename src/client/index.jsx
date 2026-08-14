@@ -31,6 +31,14 @@ const zh = {
   seatBoundHint: '此会话已连接到飞书聊天：{chat}（点此断开）',
   seatLoading: '…',
   confirmUnbind: '断开此会话与飞书的连接？',
+  nav: '飞书机器人',
+  sectionStatus: '状态',
+  sectionPreference: '偏好设置',
+  sectionBindings: '绑定管理',
+  sectionHelp: '飞书侧命令与反馈',
+  quickAction: '快捷操作',
+  rowOutputLabel: '输出方式',
+  sectionHelpText: '/model — 查询/弹出模型卡片 · /model list · /model use <provider>/<model> · /model effort <off|high|max> · /status · /stop · /help\n收到消息自动加 👍，回合完成变 ✅，失败变 ☹️；回复以流式卡片呈现，结束时保留最终结果。',
   rowTitle: '飞书机器人',
   rowDescConnected: '机器人已连接 · 绑定 {bound} 个会话 · 待绑定 {pending} 个',
   rowDescDisconnected: '机器人未连接：{reason}',
@@ -63,6 +71,14 @@ const en = {
   seatBoundHint: 'This session is connected to Feishu chat: {chat} (click to disconnect)',
   seatLoading: '…',
   confirmUnbind: 'Disconnect this session from Feishu?',
+  nav: 'Feishu Bot',
+  sectionStatus: 'Status',
+  sectionPreference: 'Preferences',
+  sectionBindings: 'Bindings',
+  sectionHelp: 'Feishu commands & feedback',
+  quickAction: 'Quick actions',
+  rowOutputLabel: 'Output',
+  sectionHelpText: '/model — show/model card · /model list · /model use <provider>/<model> · /model effort <off|high|max> · /status · /stop · /help\nInbound messages get a 👍 reaction, ✅ on completion, ☹️ on failure; replies stream into a card that keeps the final result.',
   rowTitle: 'Feishu bot',
   rowDescConnected: 'Bot connected · {bound} sessions bound · {pending} pending',
   rowDescDisconnected: 'Bot offline: {reason}',
@@ -198,9 +214,9 @@ function FeishuSeat({ sessionId, t }) {
   }, h('span', { style: dotStyle(color) }), label)
 }
 
-// ── settings row ──────────────────────────────────────────────────────────
+// ── settings section (dedicated tab) ─────────────────────────────────────
 
-function FeishuSettingsRow({ t, createSession }) {
+function FeishuSection({ t, createSession }) {
   const [status, setStatus] = useState(null)
   const [autoBind, setAutoBind] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -253,77 +269,94 @@ function FeishuSettingsRow({ t, createSession }) {
       desc = t('rowDescDisconnected').replace('{reason}', status.reason || '?')
     }
   }
+  const outputMode = status !== null && status.output !== undefined
+    ? (status.output === 'plain' ? t('outputPlain') : t('outputStream'))
+    : '…'
 
-  const rowStyle = {
+  const pageStyle = { maxWidth: 720, padding: '2px 0' }
+  const blockStyle = { marginBottom: 26 }
+  const blockTitleStyle = { fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-primary, #eee)', marginBottom: 4 }
+  const lineStyle = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 16,
     padding: '10px 0',
-    width: '100%',
+    borderBottom: '1px solid var(--dsw-alias-border-l2, #2a2a2a)',
+    fontSize: 13,
   }
-  const textStyle = { minWidth: 0 }
-  const titleStyle = { fontSize: 14, fontWeight: 500, color: 'var(--dsw-alias-label-primary, #eee)' }
-  const descStyle = { fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)', marginTop: 2 }
+  const labelStyle = { color: 'var(--dsw-alias-label-secondary, #bbb)', minWidth: 0 }
+  const valueStyle = { color: 'var(--dsw-alias-label-primary, #eee)', minWidth: 0, textAlign: 'right' }
 
-  return h('div', { style: rowStyle },
-    h('div', { style: textStyle },
-      h('div', { style: titleStyle }, t('rowTitle')),
-      h('div', { style: descStyle }, desc),
-      h('div', { style: { marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, flexWrap: 'wrap' } },
-        h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' } },
-          h('input', {
-            type: 'checkbox',
-            checked: autoBind === true,
-            disabled: busy || autoBind === null,
-            onChange: (event) => void toggleAuto(event.target.checked),
-          }),
-          t('rowAutoBind'),
-        ),
+  const bindingRow = (entry, actionLabel, onAction) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 13 } },
+    h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-secondary, #bbb)' } },
+      entry.chatName || entry.chatId,
+      h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } },
+        ' · ' + t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…'),
+    ),
+    h('button', { style: linkButtonStyle, onClick: () => void onAction() }, actionLabel),
+  )
+
+  const pendingRow = (entry) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 13 } },
+    h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-secondary, #bbb)' } },
+      t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…',
+      h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } }, ' · ' + pendingTimeLabel(entry.at, t)),
+    ),
+    h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('pendingDelete')),
+  )
+
+  return h('div', { style: pageStyle },
+    h('div', { style: blockStyle },
+      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+        h('div', { style: blockTitleStyle }, t('sectionStatus')),
+        h('button', { style: linkButtonStyle, onClick: () => void refresh() }, t('rowRefresh')),
+      ),
+      h('div', { style: lineStyle },
+        h('span', { style: labelStyle }, t('rowTitle')),
+        h('span', { style: valueStyle }, desc),
+      ),
+      h('div', { style: lineStyle },
+        h('span', { style: labelStyle }, t('rowOutputLabel')),
+        h('span', { style: valueStyle }, outputMode),
+      ),
+    ),
+    h('div', { style: blockStyle },
+      h('div', { style: blockTitleStyle }, t('sectionPreference')),
+      h('div', { style: lineStyle },
+        h('span', { style: labelStyle }, t('rowAutoBind')),
+        h('input', {
+          type: 'checkbox',
+          checked: autoBind === true,
+          disabled: busy || autoBind === null,
+          onChange: (event) => void toggleAuto(event.target.checked),
+        }),
+      ),
+      h('div', { style: lineStyle },
+        h('span', { style: labelStyle }, t('quickAction') + '：' + t('rowCreateSession')),
         h('button', {
           style: { ...linkButtonStyle, fontWeight: 600 },
           title: t('rowCreateSessionHint'),
           disabled: busy,
           onClick: () => void createAndConnect(),
         }, t('rowCreateSession')),
-        status !== null && status.output !== undefined
-          ? h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } },
-            t('rowOutput').replace('{mode}', status.output === 'plain' ? t('outputPlain') : t('outputStream')))
-          : null,
-        h('button', { style: linkButtonStyle, onClick: () => void refresh() }, t('rowRefresh')),
       ),
-      h('div', { style: { marginTop: 8, fontSize: 12, color: 'var(--dsw-alias-label-secondary, #bbb)' } },
-        h('details', null,
-          h('summary', { style: { cursor: 'pointer' } }, t('rowBindingsTitle')),
-          status !== null && status.bindings && status.bindings.length === 0 && (!status.pending || status.pending.length === 0)
-            ? h('div', { style: { marginTop: 4 } }, t('rowNoBindings'))
-            : h('div', { style: { marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 } },
-              (status ? status.bindings : []).map((entry) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                  entry.chatName || entry.chatId,
-                  h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } },
-                    ' · ' + t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…'),
-                ),
-                h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('detach')),
-              )),
-            ),
-          status !== null && status.pending && status.pending.length > 0
-            ? h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2, #333)', paddingTop: 8 } },
-                h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #999)', marginBottom: 4 } }, t('pendingTitle')),
-                h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-                  status.pending.map((entry) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                    h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                      t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…',
-                      h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } },
-                        ' · ' + pendingTimeLabel(entry.at, t)),
-                    ),
-                    h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('pendingDelete')),
-                  )),
-                ),
-              )
-            : null,
-        ),
-      ),
+    ),
+    h('div', { style: blockStyle },
+      h('div', { style: blockTitleStyle }, t('sectionBindings')),
+      status !== null && status.bindings && status.bindings.length === 0 && (!status.pending || status.pending.length === 0)
+        ? h('div', { style: { padding: '6px 0', fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)' } }, t('rowNoBindings'))
+        : null,
+      (status ? status.bindings : []).map((entry) => bindingRow(entry, t('detach'), () => detach(entry.sessionId))),
+      status !== null && status.pending && status.pending.length > 0
+        ? h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2, #333)', paddingTop: 6 } },
+            h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #999)', fontSize: 12, marginBottom: 2 } }, t('pendingTitle')),
+            status.pending.map(pendingRow),
+          )
+        : null,
+    ),
+    h('div', { style: blockStyle },
+      h('div', { style: blockTitleStyle }, t('sectionHelp')),
+      h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary, #bbb)', lineHeight: 1.9, whiteSpace: 'pre-wrap' } }, t('sectionHelpText')),
     ),
   )
 }
@@ -431,13 +464,14 @@ function apply(ctx) {
     inject: () => ({}),
   }, FeishuSeat))
 
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
     id: 'feishu',
     order: 15,
     locale: NS,
+    label: () => ctx.locale.bind(NS)('nav'),
     inject: () => ({ createSession: () => void createConnectedSession() }),
-  }, FeishuSettingsRow))
+  }, FeishuSection))
 }
 
     module.exports = { inject, apply }
