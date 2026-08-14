@@ -3,3 +3,6 @@ lib/client.js
 lib/client.js.map
 *.log
 .env
+
+# Vision toolkit local artifacts
+.dsh-vision-toolkit/
