@@ -144,6 +144,11 @@ dsh web
 ```sh
 npm run build        # esbuild 构建客户端 bundle (lib/client.js)
 npm run watch        # 监听重建
+# 注意：pnpm 的 file: 协议会按锁存复用 store 条目，重装前先删掉 profile 里的旧条目，
+# 否则服务端继续提供旧 bundle：
+#   dsh plugin --profile web remove dsh-fschannel
+#   删除 ~/.dsh/profiles/web/node_modules/.pnpm 下的 dsh-fschannel@file+* 目录
+#   dsh plugin --profile web add file:E:/Code/dsh
 node scripts/smoke-test.mjs     # 服务端冒烟（env/绑定/持久化）
 node scripts/smoke-client.mjs   # 客户端 bundle 冒烟
 node scripts/smoke-cards.mjs    # 模型卡片与触发词测试
