@@ -1,4 +1,4 @@
-// Smoke test: StreamHandle placeholder, set/append order, messageId capture, fallback.
+// Smoke test: StreamHandle placeholder, set/append order, messageId capture.
 import { StreamHandle } from '../lib/stream.js'
 
 // Fake transport.
@@ -12,7 +12,6 @@ const port = {
     await input.markdown(controller)
     return { messageId: 'om_card1' }
   },
-  send: async () => { calls.push(['fallback-send']) },
 }
 
 const handle = new StreamHandle(port, 'oc_chat', undefined, () => {}, '正在处理…')
@@ -28,15 +27,14 @@ if (calls[calls.length - 1][1] !== '最终结果') throw new Error('final conten
 if (handle.messageId !== 'om_card1') throw new Error('messageId not captured')
 if (handle.full !== '最终结果') throw new Error('full should exclude placeholder: ' + handle.full)
 
-// Fallback path: stream rejects -> accumulated text sent as plain message.
+// Failed stream: messageId stays undefined; full keeps the accumulated text.
 const failCalls = []
 const failPort = {
   stream: async () => { throw new Error('no card permission') },
-  send: async (chatId, input) => { failCalls.push(input.markdown) },
 }
 const h2 = new StreamHandle(failPort, 'oc_chat', undefined, () => {})
 h2.append('fallback text')
 await h2.finish()
-if (failCalls.length !== 1 || failCalls[0] !== 'fallback text') throw new Error('fallback send missing')
 if (h2.messageId !== undefined) throw new Error('failed stream must have no messageId')
+if (h2.full !== 'fallback text') throw new Error('full must keep text after failure')
 console.log('STREAM SMOKE OK')
