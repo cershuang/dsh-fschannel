@@ -1,0 +1,32 @@
+# dsh-fschannel — example bundle patch.
+#
+# Installed two ways:
+#   1. As a profile BUNDLE (add "dsh-fschannel" to the profile package.json's
+#      dsh.profile.bundles): this patch is applied automatically.
+#   2. By hand into the profile's user layer (~/.dsh/profiles/web/cordis.patch.yml):
+#      copy the insert block below there. The user layer survives dsh upgrades.
+#
+# One row drives BOTH halves: the host half runs the bot transport, the browser
+# half (exports["./client"]) renders the Feishu UI. Config keys:
+#   envFile        path to a .env with appid/secrect. Resolved as:
+#                  FSCHANNEL_ENV_FILE env var (set by scripts/restart-web.ps1
+#                  from the .env file) -> <cwd>/.env. Configure the key in .env:
+#                  FSCHANNEL_ENV_FILE=/path/to/dsh-fschannel/.env
+#   appId/appSecret direct credential overrides (win over envFile)
+#   requireMention group chats only respond when @-mentioned (default true)
+#   ackInbound     reply "received, processing..." before the answer (default false)
+#   hintUnbound    reply guidance to chats that are not bound (default true)
+#   bindingsFile   durable binding store path (default $DSH_HOME/feishu-bindings.json;
+#                  override via FSCHANNEL_BINDINGS_FILE in .env)
+
+- insert:
+    - id: feishu-bot
+      name: 'dsh-fschannel'
+      config:
+        envFile: !!js process.env.FSCHANNEL_ENV_FILE ?? process.cwd() + '/.env'
+        # appId: cli_xxx            # optional direct override
+        # appSecret: xxx
+        # requireMention: true
+        # ackInbound: false
+        # hintUnbound: true
+        # bindingsFile: 'C:/Users/<you>/.dsh/feishu-bindings.json'

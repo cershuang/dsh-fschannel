@@ -1,0 +1,5 @@
+node_modules/
+lib/client.js
+lib/client.js.map
+*.log
+.env
