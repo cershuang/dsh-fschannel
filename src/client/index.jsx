@@ -38,7 +38,12 @@ const zh = {
   rowDescUnconfigured: '未配置凭据（appId/appSecret）',
   rowAutoBind: '新会话默认连接飞书',
   rowCreateSession: '新建会话并连接飞书',
-  rowCreateSessionHint: '立即新建一个会话并进入待绑定状态（在飞书发一条消息完成绑定）',
+  rowCreateSessionHint: '立即新建一个会话并进入待绑定状态（在飞书发一条消息完成绑定；60 秒内未创建会话将自动取消）',
+  pendingTitle: '待绑定会话（给机器人发一条消息完成绑定）',
+  pendingDelete: '取消待绑定',
+  pendingJustNow: '刚刚',
+  pendingTime: '{n} 分钟前',
+  pendingTimeHours: '{n} 小时前',
   rowOutput: '输出方式：{mode}',
   outputStream: '流式卡片',
   outputPlain: '普通消息',
@@ -65,7 +70,12 @@ const en = {
   rowDescUnconfigured: 'Credentials not configured (appId/appSecret)',
   rowAutoBind: 'Auto-connect new sessions to Feishu',
   rowCreateSession: 'New session and connect to Feishu',
-  rowCreateSessionHint: 'Create a session right away and mark it pending (send the bot a message in Feishu to bind)',
+  rowCreateSessionHint: 'Create a session right away and mark it pending (send the bot a message in Feishu to bind; auto-cancelled when no session appears within 60s)',
+  pendingTitle: 'Pending sessions (send the bot a message to bind)',
+  pendingDelete: 'Cancel',
+  pendingJustNow: 'just now',
+  pendingTime: '{n} min ago',
+  pendingTimeHours: '{n} h ago',
   rowOutput: 'Output: {mode}',
   outputStream: 'streaming cards',
   outputPlain: 'plain messages',
@@ -134,7 +144,7 @@ function FeishuSeat({ sessionId, t }) {
     if (found !== undefined) {
       setRecord(found)
       setPhase('bound')
-    } else if ((data.pending || []).includes(sessionId)) {
+    } else if ((data.pending || []).some((entry) => entry.sessionId === sessionId)) {
       setPhase('pending')
       setRecord(null)
     } else {
@@ -285,7 +295,7 @@ function FeishuSettingsRow({ t, createSession }) {
       h('div', { style: { marginTop: 8, fontSize: 12, color: 'var(--dsw-alias-label-secondary, #bbb)' } },
         h('details', null,
           h('summary', { style: { cursor: 'pointer' } }, t('rowBindingsTitle')),
-          status !== null && status.bindings && status.bindings.length === 0
+          status !== null && status.bindings && status.bindings.length === 0 && (!status.pending || status.pending.length === 0)
             ? h('div', { style: { marginTop: 4 } }, t('rowNoBindings'))
             : h('div', { style: { marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 } },
               (status ? status.bindings : []).map((entry) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8 } },
@@ -297,10 +307,34 @@ function FeishuSettingsRow({ t, createSession }) {
                 h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('detach')),
               )),
             ),
+          status !== null && status.pending && status.pending.length > 0
+            ? h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2, #333)', paddingTop: 8 } },
+                h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #999)', marginBottom: 4 } }, t('pendingTitle')),
+                h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+                  status.pending.map((entry) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                    h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…',
+                      h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } },
+                        ' · ' + pendingTimeLabel(entry.at, t)),
+                    ),
+                    h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('pendingDelete')),
+                  )),
+                ),
+              )
+            : null,
         ),
       ),
     ),
   )
+}
+
+/** Relative time label for a pending entry. */
+function pendingTimeLabel(at, t) {
+  if (!at || at <= 0) return t('pendingJustNow')
+  const minutes = Math.floor((Date.now() - at) / 60000)
+  if (minutes < 1) return t('pendingJustNow')
+  if (minutes < 60) return t('pendingTime').replace('{n}', String(minutes))
+  return t('pendingTimeHours').replace('{n}', String(Math.floor(minutes / 60)))
 }
 
 const linkButtonStyle = {
@@ -330,12 +364,24 @@ function apply(ctx) {
   // boot/reconnect is a baseline: seed the seen set without binding, so
   // restored sessions are never mass-bound.
   let stageBind = false
+  let stageTimer = undefined
+  const clearStage = () => {
+    stageBind = false
+    if (stageTimer !== undefined) {
+      clearTimeout(stageTimer)
+      stageTimer = undefined
+    }
+  }
   const createConnectedSession = async () => {
+    clearStage()
     stageBind = true
+    // Disarm when no session appeared within the grace window, so a session
+    // created later by other means is never surprise-bound.
+    stageTimer = setTimeout(clearStage, 60000)
     try {
       await ctx.workspaces.startSession()
     } catch {
-      stageBind = false
+      clearStage()
     }
   }
   ctx.effect(() => {
@@ -343,7 +389,7 @@ function apply(ctx) {
     const maybeBind = async (sessionId) => {
       try {
         if (stageBind) {
-          stageBind = false
+          clearStage()
           await api('bind', { method: 'POST', body: JSON.stringify({ sessionId }) })
           return
         }
@@ -369,7 +415,7 @@ function apply(ctx) {
         if (summary && summary.blank === true) void maybeBind(id)
       }
     })
-    const onReset = () => { seen = null }
+    const onReset = () => { seen = null; clearStage() }
     ctx.on('connection/reset', onReset)
     return () => {
       stop()
