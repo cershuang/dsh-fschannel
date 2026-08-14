@@ -15,6 +15,11 @@
 #   appId/appSecret direct credential overrides (win over envFile)
 #   requireMention group chats only respond when @-mentioned (default true)
 #   ackInbound     reply "received, processing..." before the answer (default false)
+#   reactInbound   react to inbound messages: THUMBSUP on receipt, DONE on
+#                  completion, SAD on failure (default true)
+#   reactReceived  emoji on receipt (default THUMBSUP)
+#   reactDone      emoji when the turn completes (default DONE)
+#   reactError     emoji when the turn fails (default SAD)
 #   hintUnbound    reply guidance to chats that are not bound (default true)
 #   bindingsFile   durable binding store path (default $DSH_HOME/feishu-bindings.json;
 #                  override via FSCHANNEL_BINDINGS_FILE in .env)
@@ -28,5 +33,9 @@
         # appSecret: xxx
         # requireMention: true
         # ackInbound: false
+        # reactInbound: true
+        # reactReceived: THUMBSUP
+        # reactDone: DONE
+        # reactError: SAD
         # hintUnbound: true
         # bindingsFile: 'C:/Users/<you>/.dsh/feishu-bindings.json'
