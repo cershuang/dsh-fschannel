@@ -24,7 +24,8 @@ const fakeReact = {
 }
 
 require.cache = require.cache || {}
-const plugin = require(copyPath)
+// Loaded for its side effect: the bundle calls window.__ModuleLoader__.load().
+require(copyPath)
 if (captured === null) throw new Error('load() was not called')
 if (captured.id !== 'dsh-fschannel') throw new Error('wrong id: ' + captured.id)
 

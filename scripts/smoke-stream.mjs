@@ -28,7 +28,6 @@ if (handle.messageId !== 'om_card1') throw new Error('messageId not captured')
 if (handle.full !== '最终结果') throw new Error('full should exclude placeholder: ' + handle.full)
 
 // Failed stream: messageId stays undefined; full keeps the accumulated text.
-const failCalls = []
 const failPort = {
   stream: async () => { throw new Error('no card permission') },
 }

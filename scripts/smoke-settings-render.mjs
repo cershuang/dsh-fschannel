@@ -38,7 +38,8 @@ const fakeReact = {
   useCallback: (fn) => fn,
 }
 
-const plugin = require(copyPath)
+// Loaded for its side effect: the bundle calls window.__ModuleLoader__.load().
+require(copyPath)
 if (captured === null) throw new Error('load() was not called')
 const exportsObj = captured.factory((spec) => {
   if (spec === 'react') return fakeReact

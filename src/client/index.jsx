@@ -15,7 +15,6 @@ window.__ModuleLoader__.load({
   id: 'dsh-fschannel',
   factory: (require) => {
     var module = { exports: {} }
-    var exports = module.exports
     const React = require('react')
     const { useState, useEffect, useCallback } = React
     const h = React.createElement

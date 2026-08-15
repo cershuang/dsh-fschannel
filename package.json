@@ -23,6 +23,8 @@
   "scripts": {
     "build": "node scripts/build-client.mjs",
     "watch": "node scripts/build-client.mjs --watch",
+    "lint": "eslint .",
+    "test": "npm run lint && npm run build && node scripts/run-tests.mjs",
     "prepack": "node scripts/build-client.mjs"
   },
   "dependencies": {
@@ -32,7 +34,9 @@
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0"
   },
   "dsh": {
     "client": {

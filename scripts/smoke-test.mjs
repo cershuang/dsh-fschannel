@@ -1,10 +1,16 @@
 // Quick smoke test for env parser + binding store (pending entries carry timestamps).
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseEnv, resolveCredentials } from '../lib/env.js'
 import { BindingStore } from '../lib/bindings.js'
 
-const envPath = fileURLToPath(new URL('../.env', import.meta.url))
+// Prefer the developer's real .env, but fall back to example.env so a fresh
+// clone (and CI) can run this without one. Every assertion below holds for
+// both: neither file may carry credentials, and both set the path keys.
+const realEnv = fileURLToPath(new URL('../.env', import.meta.url))
+const envPath = existsSync(realEnv) ? realEnv : fileURLToPath(new URL('../example.env', import.meta.url))
 const text = readFileSync(envPath, 'utf8')
 const map = parseEnv(text)
 console.log('keys:', Object.keys(map).join(','))
@@ -23,7 +29,7 @@ if (fromStore.appId !== 'cli_store_app' || fromStore.source !== 'credentials') t
 const legacy = await resolveCredentials(undefined, { appId: 'cli_x', appSecret: 'legacy-secret' }, async () => undefined)
 if (legacy.appId !== 'cli_x') throw new Error('direct config failed')
 
-const file = process.env.TEMP + '/feishu-bindings-test.json'
+const file = join(tmpdir(), 'feishu-bindings-test.json')
 // Legacy pending shape (plain strings) must migrate.
 writeFileSync(file, JSON.stringify({ bindings: [], pending: ['old-pending-session'], settings: { autoBindNewSession: false } }))
 const store = new BindingStore(file, (l) => console.log('log:', l))
