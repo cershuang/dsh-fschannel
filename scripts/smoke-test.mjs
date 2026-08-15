@@ -79,5 +79,36 @@ if (store2.imagePath('sess-9', 'feishu-59.png') === undefined) throw new Error('
 if (!evictedAny) throw new Error('image index eviction report missing')
 const evicted = store2.setImage('sess-9', 'feishu-60.png', 'C:/x/60.png')
 if (evicted.length !== 1 || evicted[0] !== 'C:/x/10.png') throw new Error('eviction order wrong: ' + JSON.stringify(evicted))
+// A session's model route must survive a re-bind. It is chosen per session
+// (/model use), not per chat, and dropping it here made replayModelRoute a
+// guaranteed no-op on every bind path — the user's model choice silently
+// reverted to the default the next time the session reconnected.
+{
+  const routeFile = join(workDir, 'model-route.json')
+  const store = new BindingStore(routeFile, () => {})
+  store.bind('sess-r', 'oc_first')
+  store.setModelRoute('sess-r', { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' })
+
+  // Same session, new chat: the route rides along.
+  store.bind('sess-r', 'oc_second')
+  const kept = store.getBySession('sess-r')?.modelRoute
+  if (kept === undefined) throw new Error('model route lost on re-bind')
+  if (kept.model !== 'deepseek-v4-flash' || kept.reasoningEffort !== 'max') {
+    throw new Error('model route mangled on re-bind: ' + JSON.stringify(kept))
+  }
+  // And it survives a reload, i.e. the carried route was actually persisted.
+  if (new BindingStore(routeFile, () => {}).getBySession('sess-r')?.modelRoute?.model !== 'deepseek-v4-flash') {
+    throw new Error('carried model route was not persisted')
+  }
+
+  // A DIFFERENT session taking over that chat displaces the old record whole,
+  // so its route goes with it rather than leaking onto the newcomer.
+  store.bind('sess-other', 'oc_second')
+  if (store.getBySession('sess-r') !== undefined) throw new Error('displaced session survived')
+  if (store.getBySession('sess-other')?.modelRoute !== undefined) {
+    throw new Error('displaced session leaked its model route to the newcomer')
+  }
+}
+
 rmSync(file, { force: true })
 console.log('ALL OK')
