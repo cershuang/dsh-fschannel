@@ -18,6 +18,7 @@ const SUITES = [
   'smoke-render.mjs',
   'smoke-stream.mjs',
   'smoke-images.mjs',
+  'smoke-images-lifecycle.mjs',
   'smoke-repair.mjs',
   // These two require() the built bundle, so `npm run build` must have run.
   'smoke-client.mjs',

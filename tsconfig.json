@@ -10,6 +10,11 @@
     "checkJs": false,
     "noEmit": true,
     "strict": false,
+    // On deliberately, and on its own. The de-index bug that shipped today was
+    // a @returns declaring `name: string` over a `string | undefined` — with
+    // this off, tsc could not see the lie. noImplicitAny stays off: it would
+    // demand annotations on every SDK callback parameter for little return.
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
