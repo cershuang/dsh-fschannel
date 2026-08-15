@@ -110,5 +110,34 @@ if (evicted.length !== 1 || evicted[0] !== 'C:/x/10.png') throw new Error('evict
   }
 }
 
+// Credential precedence is per VALUE, not per tier. It used to be tier-atomic,
+// so the arrangement cordis.patch.yml itself suggests — appId in the entry
+// config, secret in the credential store — matched no tier and the store's
+// secret was silently discarded, disabling the transport.
+{
+  const storeOnly = async (name) => (name === 'FEISHU_APP_ID' ? 'cli_store' : name === 'FEISHU_APP_SECRET' ? 'store-secret' : undefined)
+  const secretOnly = async (name) => (name === 'FEISHU_APP_SECRET' ? 'store-secret' : undefined)
+  const none = async () => undefined
+
+  const bothEntry = await resolveCredentials(undefined, { appId: 'cli_entry', appSecret: 'entry-secret' }, none)
+  if (bothEntry.appId !== 'cli_entry' || bothEntry.appSecret !== 'entry-secret') throw new Error('entry tier broken')
+  if (bothEntry.source !== 'entry') throw new Error('entry source wrong: ' + bothEntry.source)
+
+  const bothStore = await resolveCredentials(undefined, {}, storeOnly)
+  if (bothStore.appId !== 'cli_store' || bothStore.appSecret !== 'store-secret') throw new Error('store tier broken')
+  if (bothStore.source !== 'credentials') throw new Error('store source wrong: ' + bothStore.source)
+
+  // The mixed case: the whole point of this fix.
+  const mixed = await resolveCredentials(undefined, { appId: 'cli_entry' }, secretOnly)
+  if (mixed.appId !== 'cli_entry') throw new Error('mixed: entry appId lost')
+  if (mixed.appSecret !== 'store-secret') throw new Error('mixed: store secret was discarded — the transport would be disabled')
+  if (mixed.source !== 'mixed') throw new Error('mixed: source should say so, got ' + mixed.source)
+
+  // Entry still outranks the store per value.
+  const override = await resolveCredentials(undefined, { appId: 'cli_entry' }, storeOnly)
+  if (override.appId !== 'cli_entry') throw new Error('entry must outrank the store for appId')
+  if (override.appSecret !== 'store-secret') throw new Error('store must supply the secret entry did not')
+}
+
 rmSync(file, { force: true })
 console.log('ALL OK')
