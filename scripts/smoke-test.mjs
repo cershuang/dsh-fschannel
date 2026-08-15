@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseEnv, resolveCredentials } from '../lib/env.js'
+import { maskSecret, parseEnv, resolveCredentials } from '../lib/env.js'
 import { BindingStore } from '../lib/bindings.js'
 
 // Prefer the developer's real .env, but fall back to example.env so a fresh
@@ -137,6 +137,21 @@ if (evicted.length !== 1 || evicted[0] !== 'C:/x/10.png') throw new Error('evict
   const override = await resolveCredentials(undefined, { appId: 'cli_entry' }, storeOnly)
   if (override.appId !== 'cli_entry') throw new Error('entry must outrank the store for appId')
   if (override.appSecret !== 'store-secret') throw new Error('store must supply the secret entry did not')
+}
+
+// maskSecret must never return the value it was asked to mask. The head and
+// tail windows are 6 and 4 characters, so anything up to length 10 overlapped
+// and came back whole — and this result goes to a log file.
+// Checking `masked.includes(value)` is NOT enough: at length 10 the old code
+// produced 'abcdef…ghij', which contains every character of the input with an
+// ellipsis wedged in the middle. The property that matters is that some
+// characters are actually withheld.
+for (const value of ['abcdefgh', 'abcdefghi', 'abcdefghij', 'abcdefghijk', 'cli_a1b2c3d4e5f6g7h8i9j0']) {
+  const masked = maskSecret(value)
+  const revealed = masked.split('…').join('')
+  if (revealed.length >= value.length && revealed !== '••••••') {
+    throw new Error(`maskSecret revealed all ${value.length} chars: ${masked}`)
+  }
 }
 
 rmSync(file, { force: true })
