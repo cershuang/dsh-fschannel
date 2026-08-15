@@ -17,6 +17,7 @@ The transport layer uses the official Feishu [@larksuite/channel](https://github
 
 ### Messaging
 - **Streaming cards** (default `output: 'stream'`): the card opens the moment a turn starts (showing "正在处理…"/processing), replies type out character by character; tool calls show a "正在调用工具：{name}" reference line; **when the turn ends the card keeps the final result**, automatically re-laid-out as a structured card (paragraphs/tables/code blocks rendered from markdown; empty or failed turns stay on the card). Falls back to plain messages without card permission
+- **Embedded card images**: markdown image references (`![alt](path)`) in the final card that point to a local image file inside the session workspace are uploaded and embedded as card `img` elements — no remote links or broken images in the card; remote URLs and unreadable paths never appear (their alt text is kept)
 - `output: 'plain'` switches to "one markdown message per step"
 - **Queueing**: SDK-level dedup (30s) + per-chat serialized delivery; when the agent is busy it replies with the queue position
 - **Reactions**: inbound messages get 👍, the turn completes to ✅, fails to ☹️ (configurable emoji and toggles; only applies to your own messages, Web-driven turns never get swapped)

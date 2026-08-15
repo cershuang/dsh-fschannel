@@ -1,5 +1,8 @@
 // Smoke test: renderFinalCard splits prose/tables/code and builds structured cards.
-import { renderFinalCard, renderPlainCard, splitSegments, parseTable } from '../lib/render.js'
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { extractImageRefs, renderFinalCardWithImages, renderFinalCard, renderPlainCard, splitSegments, parseTable } from '../lib/render.js'
 
 const sample = [
   '分析结果如下：',
@@ -136,3 +139,60 @@ console.log('RENDER SMOKE OK')
 
 console.log('RENDER FENCE + SUPPRESSION OK')
 console.log('RENDER TABLE CAP OK')
+
+// ── image embedding in final cards ─────────────────────────────────────────
+{
+  const dir = fileURLToPath(new URL('../.tmp-render-img', import.meta.url))
+  mkdirSync(dir, { recursive: true })
+  const imgPath = join(dir, 'chart.png')
+  writeFileSync(imgPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]))
+
+  // extractImageRefs: finds alt + src, keeps raw span.
+  const refs = extractImageRefs('看这张图：![趋势图](chart.png) 和 ![外链](https://x/y.png)')
+  if (refs.length !== 2) throw new Error('refs: ' + refs.length)
+  if (refs[0].alt !== '趋势图' || refs[0].src !== 'chart.png') throw new Error('ref[0] fields')
+  if (refs[1].src !== 'https://x/y.png') throw new Error('ref[1] src')
+
+  let uploaded = 0
+  const io = {
+    uploadImage: async (buffer) => { uploaded += 1; return 'img_key_' + uploaded },
+    resolveSrc: (src) => (src === 'chart.png' ? imgPath : undefined),
+  }
+
+  // Local file -> embedded img element, syntax removed from prose.
+  const text = '结论：\n\n![趋势图](chart.png)\n\n完毕。'
+  const { card, embedded } = await renderFinalCardWithImages(text, io)
+  if (embedded !== 1) throw new Error('embedded: ' + embedded)
+  const tags = card.body.elements.map((e) => e.tag)
+  if (!tags.includes('img')) throw new Error('no img element')
+  const imgEl = card.body.elements.find((e) => e.tag === 'img')
+  if (imgEl.img_key !== 'img_key_1') throw new Error('img_key')
+  if (imgEl.alt.content !== '趋势图') throw new Error('alt: ' + JSON.stringify(imgEl.alt))
+  const mdContent = card.body.elements.filter((e) => e.tag === 'markdown').map((e) => e.content).join('\n')
+  if (mdContent.includes('![')) throw new Error('markdown image syntax left in prose: ' + mdContent)
+  if (!mdContent.includes('结论')) throw new Error('prose lost: ' + mdContent)
+  // Images come after the text elements.
+  if (card.body.elements[card.body.elements.length - 1].tag !== 'img') throw new Error('img not last')
+
+  // Remote URL -> not embedded, alt kept as plain text.
+  const remote = await renderFinalCardWithImages('![外链](https://x/y.png) 说明', io)
+  if (remote.embedded !== 0) throw new Error('remote embedded')
+  const remoteText = remote.card.body.elements.map((e) => e.content ?? '').join('')
+  if (!remoteText.includes('外链')) throw new Error('remote alt lost: ' + remoteText)
+  if (remoteText.includes('https://x/y.png')) throw new Error('remote URL leaked into card: ' + remoteText)
+
+  // Missing file -> reference dropped, prose survives.
+  const missing = await renderFinalCardWithImages('![没了](gone.png) 剩下', io)
+  if (missing.embedded !== 0) throw new Error('missing embedded')
+  const missingText = missing.card.body.elements.map((e) => e.content ?? '').join('')
+  if (!missingText.includes('剩下')) throw new Error('missing prose lost')
+
+  // Text that is ONLY images -> bare image card.
+  const bare = await renderFinalCardWithImages('![图](chart.png)', io)
+  if (bare.embedded !== 1 || bare.card.body.elements.some((e) => e.tag !== 'img')) {
+    throw new Error('bare image card wrong: ' + JSON.stringify(bare.card.body.elements.map((e) => e.tag)))
+  }
+
+  rmSync(dir, { recursive: true, force: true })
+  console.log('RENDER IMAGE EMBED OK')
+}
