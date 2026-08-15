@@ -41,8 +41,8 @@
 前置：Node 22+，已安装 `dsh` CLI 与 `pnpm`（`npm i -g @deepseek-ai/dsh pnpm`）。
 
 ```sh
-# 1. 准备凭据（见附录「飞书机器人申请与配置」）
-cp example.env .env      # 然后填入真实的 FEISHU_APP_ID / FEISHU_APP_SECRET
+# 1. 准备环境（.env 只放路径配置；凭据在启动后于设置页填写）
+cp example.env .env      # 按需修改 FSCHANNEL_REPO / FSCHANNEL_ENV_FILE
 
 # 2. 构建客户端（每次修改源码后执行）
 npm install && npm run build
@@ -66,9 +66,9 @@ dsh web
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| `envFile` | `<cwd>/.env` | 凭据文件（标准 KEY=VALUE 格式；兼容旧 `appid/secrect` 空格格式） |
-| `appId` / `appSecret` | 读 envFile | 直接覆盖 |
-| `requireMention` | `true` | 群聊仅响应 @ 机器人 |
+| `envFile` | `<cwd>/.env` | 路径配置文件（FSCHANNEL_* 键）；不再承担凭据 |
+| `appId` / `appSecret` | 凭据库 | 入口配置直接覆盖；设置页「连接凭据」保存到 DSH 凭据库 |
+| `requireMention` | `true` | 群聊仅响应 @ 机器人；单成员群（1 用户 + 机器人）免 @ |
 | `output` | `stream` | `stream`=流式打字机卡片（失败回退普通消息）；`plain`=每步一条消息 |
 | `modelCardTriggers` | `true` | 提到模型/effort 时自动弹出按钮卡片 |
 | `queueAck` | `true` | Agent 忙碌时回复排队位置提示 |
@@ -85,7 +85,7 @@ dsh web
 | `hintText` | 内置 | 自定义引导文案 |
 | `bindingsFile` | `$DSH_HOME/feishu-bindings.json` | 绑定持久化路径 |
 
-凭据解析优先级：插件配置 `appId/appSecret` > `envFile` 内的 FEISHU_APP_ID / FEISHU_APP_SECRET > appid/secrect > APP_ID/APP_SECRET > LARK_APP_ID/LARK_APP_SECRET。示例见 `example.env`。
+凭据解析优先级：插件配置 `appId/appSecret` > 凭据服务（shell 导出的环境变量 > DSH 凭据库 `$DSH_HOME/.credentials.yaml` > 项目 `.env` > `~/.dsh/.env`）> 插件 `envFile`。**推荐做法**：在设置页「飞书机器人 → 连接凭据」填写 appId/appSecret，保存到凭据库（appId 仅显示掩码，secret 永不回显；`.env` 中不要再放凭据）。
 
 **路径配置（放 `.env`，不入库）**：`FSCHANNEL_REPO`（插件仓库根目录，脚本/重启用）、`FSCHANNEL_ENV_FILE`（.env 自身路径，默认取工作目录）、`FSCHANNEL_BINDINGS_FILE`（绑定数据文件，默认 `$DSH_HOME/feishu-bindings.json`）。`cordis.patch.yml` 的 `envFile` 解析顺序：`FSCHANNEL_ENV_FILE` 环境变量（由 `scripts/restart-web.ps1` 从 .env 导出）→ `<cwd>/.env`。
 
@@ -123,10 +123,10 @@ dsh web
 
 - **文件修改与重启**：插件源码在插件仓库（本机路径见 `.env` 的 `FSCHANNEL_REPO`），改代码后需 `npm run build`（改了客户端时）→ `dsh plugin --profile web add file:<插件仓库路径>`（重新复制进 store）→ 重启 `dsh web` 才生效。
 - **配置启动时读取一次**：改 `cordis.patch.yml` 里的配置需重启生效。
-- **凭据安全**：`.env` 含密钥，已加入 `.gitignore`，不要提交；`example.env` 可安全提交。
+- **凭据安全**：凭据保存在 `$DSH_HOME/.credentials.yaml`（0600 权限，dsh 凭据库），设置页永不回显；`.env` 只放路径配置，可安全提交（仓库 `.env` 仍被 `.gitignore` 忽略，`example.env` 可安全提交）。
 - **HTTP API 仅本机回环**：`/feishu/*` 只接受 127.0.0.1 访问（与 Web 同源）。
 - **流式卡片依赖卡片能力**：若飞书侧无卡片权限，SDK 自动回退普通消息；`output: 'plain'` 可整体关闭。
-- **图片/文件不转发**：文本之外的内容归一化为文本提示；流式卡片只含文本与工具活动行。
+- **图片暂存识别、文件不转发**：图片先暂存（`.dsh-fschannel-images/`），随下一条文字一起由 agent 通过 vision-tools 识别；其他文件类型归一化为文本提示；流式卡片只含文本与工具活动行。
 - **多步回合**：一个回合（含多次工具调用）在同一张流式卡片内叠加。
 - **一聊天一会话**：重复绑定会替换旧绑定（旧会话自动解绑）。
 - **未绑定聊天**：默认回引导提示语，不自动创建会话。
@@ -170,7 +170,7 @@ node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock ap
 - `lib/cards.js` — 模型/推理设置按钮卡片（构建、触发词、动作解析）
 - `lib/stream.js` — 流式卡片（缓冲 + 失败回退）
 - `lib/bindings.js` — 绑定存储（JSON 原子写，含会话级模型路由）
-- `lib/env.js` — .env 解析（标准 KEY=VALUE，兼容旧拼写）
+- `lib/env.js` — .env 解析（路径配置）+ 凭据分层解析（凭据服务 > envFile）
 - `src/client/index.jsx` → `lib/client.js` — 浏览器端：会话头 chip + 设置行
 
 ---
@@ -179,7 +179,7 @@ node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock ap
 
 - 流式卡片为整回合一张卡；卡片失败自动回退普通消息
 - 绑定在启动时读取一次；改配置需重启
-- 图片/文件不入模型（仅文本）
+- 图片经 vision-tools 识别后以描述文本形式进入模型（原始字节不入模型）
 - 停机期间到达的飞书消息不会重放（传输层无 cursor）
 
 ---
@@ -208,11 +208,8 @@ Copyright (c) 2026 CersHuang
 ### 步骤 1：创建应用并拿凭证
 1. 创建企业自建应用，名字随便（如 dsh-bot），传个头像
 2. 左侧「**凭证与基础信息**」→ 记下 **App ID**（`cli_` 开头）和 **App Secret**（Secret 首次不可见，点「重置」或「查看」获取完整值）
-3. 填入 `.env`：
-   ```
-   FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxxxxxx
-   FEISHU_APP_SECRET=your_app_secret_here
-   ```
+3. 保存到设置页：启动 `dsh web` 后，打开设置 →「飞书机器人」→「连接凭据」，填入 App ID 与 App Secret（保存到 DSH 凭据库，appId 仅显示掩码，secret 永不回显）。
+   > 历史版本曾放在 `.env`（`FEISHU_APP_ID=...` / `FEISHU_APP_SECRET=...`）；v0.1.5.1 起 `.env` 不再承担凭据，凭据一律走设置页/凭据库。
 
 ### 步骤 2：开通权限
 左侧「**权限管理**」→ 逐个搜索并开通以下 6 个权限：
@@ -223,7 +220,7 @@ Copyright (c) 2026 CersHuang
 | `im:message:send_as_bot` | 以应用身份发消息（回复、卡片） |
 | `im:message.group_at_msg:readonly` | 接收群组中 @ 机器人的消息 |
 | `im:chat` | 获取群信息（绑定后显示群名） |
-| `im:chat.members:bot_access` | 机器人获取群成员信息 |
+| `im:chat.members:bot_access` | 获取群成员信息（单成员群免 @ 判定、绑定后显示群名） |
 | `cardkit:card:write` | 发送/更新交互卡片（流式卡片、模型设置卡片） |
 
 ### 步骤 2.5：限定可用范围（安全边界，必做）

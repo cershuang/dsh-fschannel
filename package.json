@@ -1,7 +1,7 @@
 {
   "name": "dsh-fschannel",
   "description": "Feishu/Lark bot bridge for DeepSeek Harness: bind a web-created session to a Feishu chat, messages flow both ways",
-  "version": "0.2.1",
+  "version": "0.1.5.1",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

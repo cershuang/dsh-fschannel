@@ -8,12 +8,15 @@
 #
 # One row drives BOTH halves: the host half runs the bot transport, the browser
 # half (exports["./client"]) renders the Feishu UI. Config keys:
-#   envFile        path to a .env with appid/secrect. Resolved as:
-#                  FSCHANNEL_ENV_FILE env var (set by scripts/restart-web.ps1
-#                  from the .env file) -> <cwd>/.env. Configure the key in .env:
-#                  FSCHANNEL_ENV_FILE=/path/to/dsh-fschannel/.env
-#   appId/appSecret direct credential overrides (win over envFile)
-#   requireMention group chats only respond when @-mentioned (default true)
+#   envFile        path to a .env holding PATH config (FSCHANNEL_* keys); no
+#                  longer used for credentials. Resolved as: FSCHANNEL_ENV_FILE
+#                  env var (set by scripts/restart-web.ps1 from the .env file)
+#                  -> <cwd>/.env
+#   appId/appSecret direct credential overrides; otherwise credentials come
+#                  from the DSH credential store ($DSH_HOME/.credentials.yaml,
+#                  saved via the settings page 飞书机器人 -> 连接凭据)
+#   requireMention group chats only respond when @-mentioned (default true;
+#                  single-member groups — one user + the bot — skip the @ check)
 #   ackInbound     reply "received, processing..." before the answer (default false)
 #   reactInbound   react to inbound messages: THUMBSUP on receipt, DONE on
 #                  completion, SAD on failure (default true)
@@ -28,6 +31,10 @@
 #   maxHeldImageBytes  per-image limit (default 10 MiB)
 #   holdTtlMs       drop staged images after N ms without text (0 = keep)
 #   imageDir        staging directory override (default <session cwd>/.dsh-fschannel-images)
+#   output          reply style: 'stream' (streaming cards) or 'plain' (default stream;
+#                  adjustable at runtime in the settings page, persisted per machine)
+#   showImages      render received images as in-session image nodes (default true;
+#                  adjustable at runtime in the settings page)
 #   bindingsFile   durable binding store path (default $DSH_HOME/feishu-bindings.json;
 #                  override via FSCHANNEL_BINDINGS_FILE in .env)
 

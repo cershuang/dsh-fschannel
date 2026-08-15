@@ -58,6 +58,10 @@ if ($oldPid) {
   Log 'restart-web: nothing on 3080'
 }
 
+# Drop credential env vars inherited from the old dsh process tree, so the
+# fresh process resolves credentials only from the DSH credential store.
+Remove-Item Env:FEISHU_APP_ID, Env:FEISHU_APP_SECRET, Env:LARK_APP_ID, Env:LARK_APP_SECRET, Env:APP_ID, Env:APP_SECRET -ErrorAction SilentlyContinue
+
 # 2. Start dsh web fresh (via the dsh shim through pwsh, detached).
 $dsh = Get-Command dsh -ErrorAction SilentlyContinue
 if (-not $dsh) { Log 'restart-web: FAILED - dsh not on PATH'; exit 1 }
