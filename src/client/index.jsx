@@ -875,6 +875,25 @@ const inject = ['slots', 'locale', 'connection', 'sessions', 'workspaces']
 function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-fschannel: locales')
 
+  // Report the host's active locale to the server so Feishu-facing copy
+  // follows the same language (no independent language selection — the host
+  // decides; we just mirror it). Re-reported whenever the host switches.
+  const reportLocale = () => {
+    try {
+      const active = ctx.locale.getLocale().active
+      if (active === 'zh' || active === 'en') {
+        void api('config', { method: 'POST', body: JSON.stringify({ locale: active }) })
+      }
+    } catch {
+      // best effort: the seat/settings surfaces still work without reporting
+    }
+  }
+  ctx.effect(() => {
+    reportLocale()
+    const off = typeof ctx.on === 'function' ? ctx.on('locale/change', reportLocale) : undefined
+    return () => { if (typeof off === 'function') off() }
+  }, 'dsh-fschannel: locale reporting')
+
   // Auto-connect new sessions when the preference is on, and honor the
   // one-shot "new session and connect" button. The first list snapshot after
   // boot/reconnect is a baseline: seed the seen set without binding, so
