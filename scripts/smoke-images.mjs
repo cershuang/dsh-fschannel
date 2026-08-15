@@ -1,5 +1,5 @@
 // Smoke test: image validation, note composition, held buffer.
-import { composeImageNote, extFor, HeldImageBuffer, mediaTypeOf, validateImage } from '../lib/images.js'
+import { composeImageNote, extFor, HeldImageBuffer, mediaTypeOf, textWithoutImageMarkup, validateImage } from '../lib/images.js'
 
 if (mediaTypeOf('image/jpeg; charset=utf-8', undefined) !== 'image/jpeg') throw new Error('contentType parsing')
 if (mediaTypeOf(undefined, 'photo.JPG') !== 'image/jpeg') throw new Error('extension fallback')
@@ -7,6 +7,8 @@ if (mediaTypeOf(undefined, 'photo.png') !== 'image/png') throw new Error('png ex
 if (mediaTypeOf('application/pdf', 'x.pdf') !== undefined) throw new Error('pdf must be rejected')
 if (extFor('image/jpeg') !== 'jpg') throw new Error('ext jpeg')
 if (extFor('image/webp') !== 'webp') throw new Error('ext webp')
+if (textWithoutImageMarkup('![image](key)') !== '') throw new Error('image-only content must be empty')
+if (textWithoutImageMarkup('看看这个 ![image](key)') !== '看看这个') throw new Error('mixed content stripping')
 
 const ok = validateImage(new Uint8Array(100), 'image/png', undefined, 1024)
 if (!ok.ok || ok.mediaType !== 'image/png') throw new Error('valid image rejected')
