@@ -1,0 +1,33 @@
+# Line endings.
+#
+# Before this file the repository stored CRLF, and every edit made on a tool
+# that writes LF left files with mixed endings inside them — git warned about
+# it on nearly every `git add`.
+#
+# `text=auto` normalizes to LF *in the repository* only. Checkout still follows
+# core.autocrlf (true on this machine), so a Windows working tree keeps CRLF
+# and nothing changes locally; the repository just stops carrying a Windows
+# detail that makes it unportable.
+* text=auto
+
+# These must be CRLF on disk regardless of anyone's core.autocrlf. cmd.exe
+# mis-parses a batch file with LF endings — it silently merges lines, and the
+# console window flashes and closes with no error. PowerShell tolerates both,
+# but the two are edited together so they are pinned together.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Generated; never worth a diff.
+lib/client.js linguist-generated=true
+lib/client.js.map linguist-generated=true
+package-lock.json linguist-generated=true
+
+# Binary, never converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.zst binary
