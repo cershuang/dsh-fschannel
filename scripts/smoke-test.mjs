@@ -1,5 +1,5 @@
 // Quick smoke test for env parser + binding store (pending entries carry timestamps).
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,7 +29,11 @@ if (fromStore.appId !== 'cli_store_app' || fromStore.source !== 'credentials') t
 const legacy = await resolveCredentials(undefined, { appId: 'cli_x', appSecret: 'legacy-secret' }, async () => undefined)
 if (legacy.appId !== 'cli_x') throw new Error('direct config failed')
 
-const file = join(tmpdir(), 'feishu-bindings-test.json')
+// A unique directory per run: a fixed temp filename makes two concurrent runs
+// of this suite fight over the same document.
+const workDir = mkdtempSync(join(tmpdir(), 'fschannel-smoke-'))
+process.on('exit', () => { rmSync(workDir, { recursive: true, force: true }) })
+const file = join(workDir, 'feishu-bindings-test.json')
 // Legacy pending shape (plain strings) must migrate.
 writeFileSync(file, JSON.stringify({ bindings: [], pending: ['old-pending-session'], settings: { autoBindNewSession: false } }))
 const store = new BindingStore(file, (l) => console.log('log:', l))

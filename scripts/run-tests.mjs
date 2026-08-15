@@ -12,6 +12,7 @@ const SUITES = [
   'smoke-errors.mjs',
   'smoke-env-example.mjs',
   'smoke-test.mjs',
+  'smoke-bindings-concurrency.mjs',
   'smoke-locales.mjs',
   'smoke-cards.mjs',
   'smoke-render.mjs',
