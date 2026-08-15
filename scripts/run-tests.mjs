@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const SUITES = [
+  'smoke-errors.mjs',
   'smoke-env-example.mjs',
   'smoke-test.mjs',
   'smoke-locales.mjs',
@@ -22,12 +23,23 @@ const SUITES = [
   'smoke-settings-render.mjs',
 ]
 
+// A suite that hangs must fail, not stall the run forever. Without this a
+// leaked timer — an uncleared setInterval in a component test, say — keeps the
+// child alive and `npm test` never returns.
+const SUITE_TIMEOUT_MS = 60_000
+
 const failures = []
 for (const suite of SUITES) {
   const path = fileURLToPath(new URL(suite, import.meta.url))
-  const result = spawnSync(process.execPath, [path], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' })
-  const ok = result.status === 0
-  process.stdout.write(`${ok ? 'PASS' : 'FAIL'}  ${suite}\n`)
+  const result = spawnSync(process.execPath, [path], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+    timeout: SUITE_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+  })
+  const timedOut = result.error !== undefined && /** @type {{ code?: string }} */ (result.error).code === 'ETIMEDOUT'
+  const ok = !timedOut && result.status === 0
+  process.stdout.write(`${ok ? 'PASS' : 'FAIL'}  ${suite}${timedOut ? ` (timed out after ${SUITE_TIMEOUT_MS / 1000}s)` : ''}\n`)
   if (!ok) {
     failures.push(suite)
     const detail = ((result.stdout ?? '') + (result.stderr ?? '')).trimEnd()

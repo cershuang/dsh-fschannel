@@ -42,6 +42,15 @@ if (typeof exportsObj.apply !== 'function') throw new Error('apply missing')
 if (!exportsObj.inject.includes('workspaces')) throw new Error('workspaces not injected')
 
 const registered = []
+// Record timers instead of arming them. createConnectedSession sets a 60s
+// disarm timeout (src/client/index.jsx), and a real one kept this process
+// alive for a full minute after the assertions had already passed — the suite
+// silently cost 60s on every run. Recording also makes the disarm assertable.
+/** @type {Array<{ ms: number, fn: Function, cleared: boolean }>} */
+const timeouts = []
+globalThis.setTimeout = (fn, ms) => { timeouts.push({ fn, ms, cleared: false }); return timeouts.length - 1 }
+globalThis.clearTimeout = (id) => { if (timeouts[id] !== undefined) timeouts[id].cleared = true }
+
 let startSessionCalls = 0
 const ctx = {
   effect(fn, label) { fn(); return () => {} },
@@ -84,4 +93,13 @@ const injected = settingsOpts.inject()
 if (typeof injected.createSession !== 'function') throw new Error('createSession prop missing')
 await injected.createSession()
 if (startSessionCalls !== 1) throw new Error('startSession not called')
+
+// The staged auto-bind window: createConnectedSession arms a 60s disarm so a
+// session created later by other means is never surprise-bound.
+const disarm = timeouts.find((timer) => timer.ms === 60000)
+if (disarm === undefined) {
+  throw new Error('auto-bind disarm timer not armed: ' + JSON.stringify(timeouts.map((t) => t.ms)))
+}
+if (typeof disarm.fn !== 'function') throw new Error('disarm timer has no callback')
+
 console.log('CLIENT SMOKE OK')
