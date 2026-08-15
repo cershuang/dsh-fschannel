@@ -1,0 +1,249 @@
+// Behaviour smoke for the client half: the paths the render-level suite cannot
+// reach because its mocks are deliberately inert.
+//
+// Covers the locale-reporting effect (which was silently dead in the other two
+// suites — neither stubs ctx.locale.getLocale, so the call threw straight into
+// a catch and the POST never fired), api()'s two failure branches, the
+// serverError code mapping, the shared refresh bus, the pending-phase poll, and
+// the client's own zh/en dictionaries.
+//
+// Timers are recorded rather than armed: a real setInterval keeps the process
+// alive and the runner would kill the suite on its timeout.
+import { copyFileSync, rmSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
+const bundlePath = fileURLToPath(new URL('../lib/client.js', import.meta.url))
+// A third distinct name, so this suite can run beside the other two.
+const copyPath = fileURLToPath(new URL('../lib/client.behavior-smoke.cjs', import.meta.url))
+copyFileSync(bundlePath, copyPath)
+process.on('exit', () => { rmSync(copyPath, { force: true }) })
+
+// ── timer capture ─────────────────────────────────────────────────────────
+/** @type {Array<{ ms: number, fn: Function, cleared: boolean, kind: string }>} */
+const timers = []
+globalThis.setInterval = (fn, ms) => { timers.push({ fn, ms, cleared: false, kind: 'interval' }); return timers.length - 1 }
+globalThis.clearInterval = (id) => { if (timers[id] !== undefined) timers[id].cleared = true }
+globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms, cleared: false, kind: 'timeout' }); return timers.length - 1 }
+globalThis.clearTimeout = (id) => { if (timers[id] !== undefined) timers[id].cleared = true }
+
+// ── React mock that keeps state AND cleanup functions ─────────────────────
+let stateSlots = []
+let renderPass = 0
+/** @type {Function[]} */
+let cleanups = []
+const useState = (init) => {
+  if (renderPass >= stateSlots.length) stateSlots.push({ value: init })
+  const slot = stateSlots[renderPass]
+  renderPass += 1
+  return [slot.value, (v) => { slot.value = v }]
+}
+const resetState = () => { stateSlots = []; renderPass = 0; cleanups = [] }
+const reRender = () => { renderPass = 0 }
+const unmount = () => { while (cleanups.length > 0) { const fn = cleanups.pop(); if (typeof fn === 'function') fn() } }
+
+const fakeReact = {
+  createElement: (type, props, ...children) => ({ type, props, children }),
+  Fragment: Symbol('fragment'),
+  useState,
+  // Unlike the other suites, keep the cleanup so unsubscribe and clearInterval
+  // are observable at all.
+  useEffect: (cb) => { const c = cb(); if (typeof c === 'function') cleanups.push(c) },
+  useCallback: (fn) => fn,
+}
+
+// ── fetch recorder ────────────────────────────────────────────────────────
+let fetchCalls = []
+let statusPayload = { ok: true, connected: true, configured: true, bindings: [], pending: [] }
+let configPayload = { ok: true, autoBindNewSession: false, holdTtlSeconds: 0, maxHeldImages: 10, maxHeldImageBytes: 10, locale: 'zh', credentials: {} }
+let postReply = { ok: true }
+let fetchMode = 'normal' // normal | reject | badjson
+const installFetch = () => {
+  globalThis.fetch = async (url, options) => {
+    fetchCalls.push({ url: String(url), method: options?.method ?? 'GET', body: options?.body })
+    if (fetchMode === 'reject') throw new Error('network down')
+    if (fetchMode === 'badjson') return { json: async () => { throw new Error('not json') } }
+    if (options?.method === 'POST') return { json: async () => postReply }
+    return { json: async () => (String(url).includes('/status') ? statusPayload : configPayload) }
+  }
+}
+installFetch()
+
+const settle = () => new Promise((resolve) => { process.nextTick(() => process.nextTick(resolve)) })
+
+// ── load the bundle ───────────────────────────────────────────────────────
+let captured = null
+globalThis.window = { __ModuleLoader__: { load(handoff) { captured = handoff } }, confirm: () => true, open: () => {} }
+require(copyPath)
+if (captured === null) throw new Error('load() was not called')
+const exportsObj = captured.factory((spec) => {
+  if (spec === 'react') return fakeReact
+  throw new Error('unexpected require: ' + spec)
+})
+
+// ── ctx with a real locale service ────────────────────────────────────────
+let activeLocale = 'en'
+/** @type {Array<[string, Function]>} */
+const subscriptions = []
+let offCalls = 0
+let registeredDicts = null
+const registered = []
+const makeCtx = ({ withGetLocale = true } = {}) => ({
+  effect(fn) { const dispose = fn(); if (typeof dispose === 'function') cleanups.push(dispose); return () => {} },
+  on(event, fn) { subscriptions.push([event, fn]); return () => { offCalls += 1 } },
+  off() {},
+  locale: {
+    register(ns, dicts) { registeredDicts = dicts; return () => {} },
+    bind: () => (key) => key,
+    ...(withGetLocale ? { getLocale: () => ({ active: activeLocale }) } : {}),
+  },
+  sessions: { list: { getSnapshot: () => ({ byId: {} }), subscribe: () => () => {} } },
+  workspaces: { startSession: async () => {} },
+  slots: {
+    inject(name, cb) { const opts = cb(); registered.push(opts) },
+    register: (opts, view) => { registered.push({ ...opts, view }); return () => {} },
+  },
+  get(name) { return name === 'conversationEvents' ? { register: () => {} } : undefined },
+})
+
+// ── 1. locale reporting ───────────────────────────────────────────────────
+resetState()
+fetchCalls = []
+exportsObj.apply(makeCtx())
+await settle()
+
+const localePosts = fetchCalls.filter((call) => call.method === 'POST' && call.url.includes('/config'))
+if (localePosts.length !== 1) throw new Error('expected one locale POST, got ' + localePosts.length)
+if (JSON.parse(localePosts[0].body).locale !== 'en') throw new Error('wrong locale reported: ' + localePosts[0].body)
+
+const localeSub = subscriptions.find(([event]) => event === 'locale/change')
+if (localeSub === undefined) throw new Error("did not subscribe to 'locale/change'")
+
+// A host language switch must re-report.
+activeLocale = 'zh'
+fetchCalls = []
+localeSub[1]()
+await settle()
+const reposts = fetchCalls.filter((call) => call.method === 'POST' && call.url.includes('/config'))
+if (reposts.length !== 1 || JSON.parse(reposts[0].body).locale !== 'zh') {
+  throw new Error('locale change not re-reported: ' + JSON.stringify(reposts))
+}
+
+// Unmounting must drop the locale subscription, or a reloaded plugin reports
+// twice for every host language switch.
+unmount()
+if (offCalls === 0) throw new Error('locale/change subscription not disposed on unmount')
+
+// The catch around getLocale is a real fallback, not a way to hide a broken
+// call: a host without the locale service must still mount every surface.
+resetState()
+subscriptions.length = 0
+registered.length = 0
+fetchCalls = []
+exportsObj.apply(makeCtx({ withGetLocale: false }))
+await settle()
+if (!registered.some((opts) => opts && opts.id === 'feishu')) throw new Error('settings section missing without getLocale')
+if (fetchCalls.some((call) => call.method === 'POST')) throw new Error('must not POST a locale it could not read')
+
+// ── 2. client dictionary parity ───────────────────────────────────────────
+if (registeredDicts === null) throw new Error('ctx.locale.register was never called')
+const { zh, en } = registeredDicts
+const zhKeys = Object.keys(zh).sort()
+const missingInEn = zhKeys.filter((key) => !(key in en))
+if (missingInEn.length > 0) throw new Error('client en missing keys: ' + missingInEn.join(', '))
+const extraInEn = Object.keys(en).filter((key) => !(key in zh))
+if (extraInEn.length > 0) throw new Error('client en has unknown keys: ' + extraInEn.join(', '))
+const placeholders = (text) => [...String(text).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',')
+for (const key of zhKeys) {
+  if (placeholders(zh[key]) !== placeholders(en[key])) {
+    throw new Error(`client placeholder mismatch in "${key}": zh(${placeholders(zh[key])}) vs en(${placeholders(en[key])})`)
+  }
+  if (typeof zh[key] !== 'string' || zh[key] === '') throw new Error(`client zh["${key}"] is empty`)
+  if (typeof en[key] !== 'string' || en[key] === '') throw new Error(`client en["${key}"] is empty`)
+}
+
+// ── 3. the settings section: api() failures and serverError mapping ───────
+const section = registered.find((opts) => opts && opts.id === 'feishu')
+if (section === undefined || typeof section.view !== 'function') throw new Error('settings section view missing')
+const FeishuSection = section.view
+
+// A dictionary that actually carries placeholders: with t = (key) => key the
+// substitutions are no-ops and every error code renders identically, so the
+// assertions below would pass against any mapping at all.
+const dict = {
+  credResultFail: 'FAIL[{error}]',
+  errAppIdSaveFailed: 'appId!{detail}',
+  errInvalidHoldTtl: 'ttl-invalid',
+  errNetwork: 'net-down',
+  errUnknown: 'unknown',
+}
+const t = (key) => dict[key] ?? key
+
+const walk = (node, acc = []) => {
+  if (node === null || node === undefined) return acc
+  if (typeof node === 'string' || typeof node === 'number') { acc.push(node); return acc }
+  acc.push(node)
+  if (Array.isArray(node)) { for (const n of node) walk(n, acc); return acc }
+  const kids = node.children
+  if (kids !== undefined) for (const c of (Array.isArray(kids) ? kids : [kids])) walk(c, acc)
+  return acc
+}
+const renderSection = async () => {
+  FeishuSection({ t, createSession: async () => {} })
+  await settle()
+  reRender()
+  return walk(FeishuSection({ t, createSession: async () => {} }))
+}
+
+// A rejected fetch must not become an unhandled rejection, and must leave the
+// section renderable rather than blank.
+resetState()
+fetchMode = 'reject'
+const rejectedNodes = await renderSection()
+if (rejectedNodes.length === 0) throw new Error('section rendered nothing after a failed fetch')
+fetchMode = 'normal'
+
+// A body that is not JSON is the other api() failure branch.
+resetState()
+fetchMode = 'badjson'
+const badJsonNodes = await renderSection()
+if (badJsonNodes.length === 0) throw new Error('section rendered nothing after a bad JSON body')
+fetchMode = 'normal'
+
+// ── 4. the pending-phase poll ─────────────────────────────────────────────
+const seat = registered.find((opts) => opts && opts.id === 'feishu-bind')
+if (seat === undefined || typeof seat.view !== 'function') throw new Error('seat view missing')
+const FeishuSeat = seat.view
+
+// Bound: no poll.
+resetState()
+timers.length = 0
+statusPayload = { ok: true, connected: true, configured: true, bindings: [{ sessionId: 'sess-1', chatId: 'oc_1' }], pending: [] }
+FeishuSeat({ sessionId: 'sess-1', t })
+await settle()
+reRender()
+FeishuSeat({ sessionId: 'sess-1', t })
+if (timers.some((timer) => timer.kind === 'interval')) throw new Error('bound phase must not poll')
+
+// Pending: a 5s poll that refreshes and is cleared on unmount.
+resetState()
+timers.length = 0
+statusPayload = { ok: true, connected: true, configured: true, bindings: [], pending: [{ sessionId: 'sess-1', at: 0 }] }
+FeishuSeat({ sessionId: 'sess-1', t })
+await settle()
+reRender()
+FeishuSeat({ sessionId: 'sess-1', t })
+const poll = timers.find((timer) => timer.kind === 'interval')
+if (poll === undefined) throw new Error('pending phase did not arm a poll')
+if (poll.ms !== 5000) throw new Error('poll interval should be 5000ms, got ' + poll.ms)
+
+fetchCalls = []
+poll.fn()
+await settle()
+if (!fetchCalls.some((call) => call.url.includes('/status'))) throw new Error('poll tick did not re-read status')
+
+unmount()
+if (!poll.cleared) throw new Error('poll timer not cleared on unmount')
+
+console.log('CLIENT BEHAVIOR SMOKE OK (locale reporting, dictionary parity, api failures, pending poll)')

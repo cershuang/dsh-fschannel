@@ -21,6 +21,7 @@ const SUITES = [
   'smoke-repair.mjs',
   // These two require() the built bundle, so `npm run build` must have run.
   'smoke-client.mjs',
+  'smoke-client-behavior.mjs',
   'smoke-settings-render.mjs',
 ]
 

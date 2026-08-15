@@ -3,6 +3,7 @@ lib/client.js
 lib/client.js.map
 # Bundle copies the smoke tests require(); removed on exit, but not if killed.
 lib/*.smoke.cjs
+lib/*-smoke.cjs
 *.log
 .env
 
