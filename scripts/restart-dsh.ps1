@@ -53,6 +53,16 @@ $installed = Join-Path $profileDir 'node_modules/dsh-fschannel'
 $log = Join-Path $repo 'restart-dsh.log'
 $stdoutLog = Join-Path $repo 'dsh.stdout.log'
 $stderrLog = Join-Path $repo 'dsh.stderr.log'
+# Rotate before appending: this log only ever grew, and it lives in the repo.
+# stdout/stderr are truncated by the redirect on every launch, so only this one
+# needs it.
+if (Test-Path $log) {
+  $logItem = Get-Item $log
+  if ($logItem.Length -gt 1MB) {
+    Move-Item -LiteralPath $log -Destination "$log.1" -Force -ErrorAction SilentlyContinue
+  }
+}
+
 # One writer for the whole run: Out-File -Append reopened the file per line.
 $logLines = [System.Collections.Generic.List[string]]::new()
 function Log($line) {

@@ -208,6 +208,8 @@ node scripts/integration-test.mjs  # integration test (real Feishu connection + 
 - Bindings are read once at startup; config changes need a restart
 - Images enter the model as recognition description text (raw bytes never enter the model)
 - Feishu messages arriving while the harness is down are not replayed (no transport cursor)
+- The server locale is one process-wide value (whichever client reported last). Settings-page errors are unaffected — the host returns error codes and the client translates them — but Feishu-facing copy follows the last browser to report; a chat has no locale of its own, so this is a deliberate single-tenant trade-off
+- `POST /feishu/repair-logs` is an **operations-only** endpoint: nothing in the UI calls it, it is rate-limited to one pass a minute, and the pass is fully synchronous — it blocks the entire harness process (every agent, the web server, the Feishu transport) while it runs
 
 ---
 
