@@ -39,6 +39,9 @@
 #                  override via FSCHANNEL_BINDINGS_FILE in .env)
 #   sendImageTool  register the send_feishu_image tool so the agent can send
 #                  generated images to the bound chat (default true)
+#   sendFileTool   register the send_feishu_file tool so the agent can send
+#                  generated files (any type, <= 30 MiB) to the bound chat
+#                  (default true)
 
 - insert:
     - id: feishu-bot

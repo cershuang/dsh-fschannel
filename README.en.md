@@ -23,6 +23,7 @@ The transport layer uses the official Feishu [@larksuite/channel](https://github
 - **Image staging & recognition**: Feishu images are staged first, then delivered with your NEXT text message as file paths plus a recognition instruction — the agent loads the vision-tools skill and recognizes each image with vision tools (vision_glance/vision_ocr etc.), answering combined with the text (requires @anionex/dsh-vision-toolkit installed and its runtime ready; images live in the session workspace `.dsh-fschannel-images/`)
 - **Session image gallery**: the "Feishu images" button in the session header opens a grid of that session's images (click to view the original). Image metadata is managed by the plugin itself (`feishu-bindings.json`) and is **no longer written into the session log** — the old `feishu/image` event type was unknown to the harness and made the whole session unloadable; since v0.1.5.3 the plugin repairs historical logs at boot (marks those events with the harness-accepted `ignorable` flag) and re-indexes historical images
 - **Bot sends images**: after the agent generates an image during a turn (charts, crops, code-rendered PNGs etc.), it can call the `send_feishu_image` tool to deliver the image to the bound Feishu chat (optionally with a caption); the sent image also enters that session's Web gallery. The image path must stay inside the session workspace (traversal blocked); PNG/JPEG/WebP/GIF supported; `sendImageTool: false` disables the tool
+- **Bot sends files**: the agent can call the `send_feishu_file` tool to deliver any generated file (reports, exports, logs; ≤ 30 MiB) to the bound Feishu chat, with an optional display file name (defaults to the original basename) and caption; `sendFileTool: false` disables the tool
 - Groups only answer when the bot is @-mentioned by default (`requireMention`); unbound chats get a guidance hint (can be disabled)
 
 ### Model control from Feishu
@@ -205,6 +206,7 @@ node scripts/integration-test.mjs  # integration test (real Feishu connection + 
 - `lib/repair.js` — historical session-log repair (zstd frame decoding, foreign events, seq conflicts)
 - `lib/locales.js` — Feishu-facing copy (zh/en, follows the host locale)
 - `lib/send-image-tool.js` — `send_feishu_image` tool (agent sends generated images to the bound chat)
+- `lib/send-file-tool.js` — `send_feishu_file` tool (agent sends generated files to the bound chat)
 - `src/client/index.jsx` → `lib/client.js` — browser side: session-header chip + settings page
 
 ---
