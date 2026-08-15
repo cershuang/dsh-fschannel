@@ -6,3 +6,6 @@ lib/client.js.map
 
 # Vision toolkit local artifacts
 .dsh-vision-toolkit/
+
+# Feishu staged images (session workspace)
+.dsh-fschannel-images/
