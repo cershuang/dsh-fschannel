@@ -58,8 +58,16 @@ dsh plugin --profile web add file:<插件仓库路径>
 dsh web
 ```
 
-> 首次安装时 pnpm 可能因构建脚本策略报 `ERR_PNPM_IGNORED_BUILDS`（protobufjs），
-> 已在 profile 的 `pnpm-workspace.yaml` 中配置 `allowBuilds: { protobufjs: false }`。
+> 首次安装时 pnpm 可能因构建脚本策略报 `ERR_PNPM_IGNORED_BUILDS`（protobufjs）。
+> protobufjs 是生产传递依赖（`@larksuite/channel` → `@larksuiteoapi/node-sdk` → protobufjs）
+> 且带安装脚本，但本插件不需要它构建。在 **profile 目录**的
+> `$DSH_HOME/profiles/<profile>/pnpm-workspace.yaml`（**不在本仓库内**，需要你自己创建或追加）
+> 中加入：
+>
+> ```yaml
+> allowBuilds:
+>   protobufjs: false
+> ```
 
 ---
 

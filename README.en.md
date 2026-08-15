@@ -60,7 +60,12 @@ dsh plugin --profile web add file:<plugin-repo-path>
 dsh web
 ```
 
-> On first install pnpm may report `ERR_PNPM_IGNORED_BUILDS` (protobufjs) due to build-script policy; the profile's `pnpm-workspace.yaml` already has `allowBuilds: { protobufjs: false }`.
+> On first install pnpm may report `ERR_PNPM_IGNORED_BUILDS` (protobufjs) due to build-script policy. protobufjs is a production transitive dependency (`@larksuite/channel` → `@larksuiteoapi/node-sdk` → protobufjs) that ships an install script this plugin does not need. Add the following to `$DSH_HOME/profiles/<profile>/pnpm-workspace.yaml` — that file lives in the **profile directory, not in this repo**, so you have to create or extend it yourself:
+>
+> ```yaml
+> allowBuilds:
+>   protobufjs: false
+> ```
 
 ---
 
