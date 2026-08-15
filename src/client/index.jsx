@@ -46,22 +46,18 @@ const zh = {
   rowAutoBind: '新会话默认连接飞书',
   rowCreateSession: '新建会话并连接飞书',
   rowCreateSessionHint: '立即新建一个会话并进入待绑定状态（在飞书发一条消息完成绑定；60 秒内未创建会话将自动取消）',
-  pendingTitle: '待绑定会话（给机器人发一条消息完成绑定）',
   pendingDelete: '取消待绑定',
   pendingBadge: '待绑定',
   pendingTimePrefix: '创建于 ',
   pendingJustNow: '刚刚',
   pendingTime: '{n} 分钟前',
   pendingTimeHours: '{n} 小时前',
-  rowOutput: '输出方式：{mode}',
   outputStream: '流式卡片',
   outputPlain: '普通消息',
   rowRefresh: '刷新',
-  rowBindingsTitle: '绑定列表',
   rowNoBindings: '还没有绑定任何会话',
   detach: '断开',
   chatUnknown: '未知聊天',
-  sessionShort: '会话',
   // bindings table
   thChatId: '聊天 ocID',
   thSession: '会话',
@@ -140,22 +136,18 @@ const en = {
   rowAutoBind: 'Auto-connect new sessions to Feishu',
   rowCreateSession: 'New session and connect to Feishu',
   rowCreateSessionHint: 'Create a session right away and mark it pending (send the bot a message in Feishu to bind; auto-cancelled when no session appears within 60s)',
-  pendingTitle: 'Pending sessions (send the bot a message to bind)',
   pendingDelete: 'Cancel',
   pendingBadge: 'pending',
   pendingTimePrefix: 'created ',
   pendingJustNow: 'just now',
   pendingTime: '{n} min ago',
   pendingTimeHours: '{n} h ago',
-  rowOutput: 'Output: {mode}',
   outputStream: 'streaming cards',
   outputPlain: 'plain messages',
   rowRefresh: 'Refresh',
-  rowBindingsTitle: 'Bindings',
   rowNoBindings: 'No sessions bound yet',
   detach: 'Detach',
   chatUnknown: 'unknown chat',
-  sessionShort: 'Session',
   // bindings table
   thChatId: 'Chat ocID',
   thSession: 'Session',
@@ -481,14 +473,17 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     }
   }
 
-  // status === null means the status fetch failed, which is not the same as
-  // "no credentials configured" — that used to be the message for both.
+  // Three distinct states that used to collapse into one message:
+  // status === null is a failed fetch, configured === false is missing
+  // credentials, and anything else offline is a real connection failure.
   let desc = t('rowDescConnecting')
   if (status !== null) {
     if (status.connected) {
       desc = t('rowDescConnected')
         .replace('{bound}', String(status.bindings ? status.bindings.length : 0))
         .replace('{pending}', String(status.pending ? status.pending.length : 0))
+    } else if (status.configured === false) {
+      desc = t('rowDescUnconfigured')
     } else {
       desc = t('rowDescDisconnected').replace('{reason}', status.reason || '?')
     }
