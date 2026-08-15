@@ -156,7 +156,7 @@ npm run watch        # 监听重建
 # 否则服务端继续提供旧 bundle：
 #   dsh plugin --profile web remove dsh-fschannel
 #   删除 ~/.dsh/profiles/web/node_modules/.pnpm 下的 dsh-fschannel@file+* 目录
-#   dsh plugin --profile web add file:E:/Code/dsh
+#   dsh plugin --profile web add file:<插件仓库路径>
 node scripts/smoke-test.mjs     # 服务端冒烟（env/绑定/持久化）
 node scripts/smoke-client.mjs   # 客户端 bundle 冒烟
 node scripts/smoke-settings-render.mjs  # 设置页渲染冒烟（绑定表格 + 排版）
