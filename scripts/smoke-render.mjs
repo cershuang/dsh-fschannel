@@ -46,3 +46,68 @@ if (renderFinalCard('   ') !== undefined) throw new Error('empty text')
 const plain = renderPlainCard('**x**')
 if (plain.body.elements.length !== 1 || plain.body.elements[0].tag !== 'markdown') throw new Error('plain card')
 console.log('RENDER SMOKE OK')
+
+{
+  // ── fence run length ──────────────────────────────────────────────────
+  // CommonMark: a closing fence is the same character, AT LEAST as long as the
+  // opener, and carries no info string. The close test used to hard-code length
+  // three, which broke both directions.
+  const BT = String.fromCharCode(96)
+  const f3 = BT.repeat(3)
+  const f4 = BT.repeat(4)
+
+  const kindsOf = (text) => splitSegments(text).map((s) => s.kind).join(',')
+
+  // T1 — a longer opener is not closed by a shorter inner fence.
+  const t1 = ['Intro', f4 + 'md', f3 + 'js', 'code()', f3, f4, 'Tail'].join('\n')
+  if (kindsOf(t1) !== 'prose,code,prose') throw new Error('T1 run-length close: ' + kindsOf(t1))
+
+  // T2 — a longer closer DOES close a shorter opener; the tail stays prose.
+  const t2 = ['Intro', f3 + 'js', 'code()', f4, 'Tail'].join('\n')
+  const t2segs = splitSegments(t2)
+  if (t2segs[t2segs.length - 1].text !== 'Tail') throw new Error('T2 tail swallowed: ' + JSON.stringify(t2segs))
+
+  // T3 (guard) — an info string may NOT close a fence, so ```js inside ```md is
+  // content. A rewrite that relaxed the closer to startsWith would break this.
+  const t3 = ['Intro', f3 + 'md', 'text', f3 + 'js', 'code()', f3, f3, 'Tail'].join('\n')
+  if (kindsOf(t3) !== 'prose,code,code') throw new Error('T3 info-string rule: ' + kindsOf(t3))
+  if (!splitSegments(t3)[1].text.includes(f3 + 'js')) throw new Error('T3 inner fence was treated as a closer')
+
+  // ── table detection must not run inside invisible code regions ────────────
+  // These blocks are deliberately NOT segmented (Feishu renders them fine, and
+  // splitting them would tear the list apart) — they only suppress tables.
+
+  // T4 — a fence indented inside a list item.
+  const t4 = ['- example:', '  ' + f3 + 'markdown', '  | a | b |', '  |---|---|', '  | 1 | 2 |', '  ' + f3, '- next'].join('\n')
+  if (renderFinalCard(t4).body.elements.filter((e) => e.tag === 'table').length !== 0) {
+    throw new Error('T4 table promoted inside an indented fence')
+  }
+
+  // T5 — a 4-space indented code block.
+  const t5 = ['Code:', '', '    | a | b |', '    |---|---|', '    | 1 | 2 |', '', 'done'].join('\n')
+  if (renderFinalCard(t5).body.elements.filter((e) => e.tag === 'table').length !== 0) {
+    throw new Error('T5 table promoted inside a 4-space indented block')
+  }
+
+  // T6 (guard) — a flush-left fence still suppresses tables AND stays one block.
+  const t6 = ['Example:', f3 + 'markdown', '| a | b |', '|---|---|', '| 1 | 2 |', f3, 'next'].join('\n')
+  if (renderFinalCard(t6).body.elements.filter((e) => e.tag === 'table').length !== 0) {
+    throw new Error('T6 table promoted inside a flush-left fence')
+  }
+  if (kindsOf(t6) !== 'prose,code,prose') throw new Error('T6 flush-left block was split: ' + kindsOf(t6))
+
+  // T7 (guard) — a real table still becomes a table element.
+  const t7 = ['| a | b |', '|---|---|', '| 1 | 2 |'].join('\n')
+  if (renderFinalCard(t7).body.elements.filter((e) => e.tag === 'table').length !== 1) {
+    throw new Error('T7 a genuine table stopped being promoted')
+  }
+
+  // ── renderPlainCard must respect the limit this module declares ───────────
+  const plain = renderPlainCard('z'.repeat(100000))
+  if (plain.body.elements[0].content.length > 30000) {
+    throw new Error('T11 renderPlainCard exceeds MARKDOWN_MAX_CHARS: ' + plain.body.elements[0].content.length)
+  }
+
+}
+
+console.log('RENDER FENCE + SUPPRESSION OK')
