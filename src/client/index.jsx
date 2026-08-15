@@ -83,6 +83,22 @@ const zh = {
   credResultOk: '设置已保存，立即生效',
   credResultFail: '保存失败：{error}',
   credMaskedHint: '仅显示首尾，完整值不回显',
+  // Server validation codes (POST /feishu/config -> { code }). The host does
+  // not localize these: its dictionary is one process-wide value, so it would
+  // answer in whichever language another browser tab reported last.
+  errInvalidOutput: 'output 必须是 stream 或 plain',
+  errInvalidShowImages: 'showImages 必须是布尔值',
+  errInvalidHoldTtl: 'holdTtlSeconds 必须是不小于 0 的整数（秒）',
+  errInvalidMaxHeldImages: 'maxHeldImages 必须是大于等于 1 的整数',
+  errInvalidMaxHeldImageBytes: 'maxHeldImageBytes 必须在 0.001 到 1024 MB 之间',
+  errInvalidLocale: 'locale 必须是 zh 或 en',
+  errAppIdSaveFailed: 'appId 保存失败：{detail}',
+  errAppSecretSaveFailed: 'appSecret 保存失败：{detail}',
+  errNetwork: '网络错误',
+  errUnknown: '未知错误',
+  // Punctuation-bearing wrappers; the brackets belong to the language.
+  parenNote: '（{text}）',
+  labelValue: '{label}：{value}',
   // staging preferences
   sectionStaging: '图片暂存',
   holdTtlLabel: '暂存过期时间（秒，0 = 不过期）',
@@ -161,6 +177,18 @@ const en = {
   credResultOk: 'Settings saved and applied',
   credResultFail: 'Save failed: {error}',
   credMaskedHint: 'head/tail only; full value never echoed',
+  errInvalidOutput: 'output must be stream or plain',
+  errInvalidShowImages: 'showImages must be a boolean',
+  errInvalidHoldTtl: 'holdTtlSeconds must be an integer >= 0 (seconds)',
+  errInvalidMaxHeldImages: 'maxHeldImages must be an integer >= 1',
+  errInvalidMaxHeldImageBytes: 'maxHeldImageBytes must be between 0.001 and 1024 MB',
+  errInvalidLocale: 'locale must be zh or en',
+  errAppIdSaveFailed: 'appId save failed: {detail}',
+  errAppSecretSaveFailed: 'appSecret save failed: {detail}',
+  errNetwork: 'network error',
+  errUnknown: 'unknown error',
+  parenNote: '({text})',
+  labelValue: '{label}: {value}',
   // staging preferences
   sectionStaging: 'Image staging',
   holdTtlLabel: 'Staging expiry (seconds, 0 = never)',
@@ -182,14 +210,63 @@ const NS = 'feishu'
 
 // ── shared helpers ────────────────────────────────────────────────────────
 
-/** @returns {Promise<object>} parsed JSON from /feishu/<path>. */
+/**
+ * Call /feishu/<path>. Never rejects: several callers are fire-and-forget
+ * (`void api(...)`), where a rejected fetch became an unhandled promise
+ * rejection and the surface silently stopped updating. Failures come back as
+ * { ok: false, code }, the same shape the host uses.
+ * @returns {Promise<object>} parsed JSON, or an ok:false envelope.
+ */
 async function api(path, options) {
-  const res = await fetch('/feishu/' + path, {
-    cache: 'no-store',
-    headers: options && options.body !== undefined ? { 'content-type': 'application/json' } : undefined,
-    ...options,
-  })
-  return res.json().catch(() => ({ ok: false }))
+  try {
+    const res = await fetch('/feishu/' + path, {
+      cache: 'no-store',
+      headers: options && options.body !== undefined ? { 'content-type': 'application/json' } : undefined,
+      ...options,
+    })
+    return await res.json().catch(() => ({ ok: false, code: 'unknown' }))
+  } catch {
+    return { ok: false, code: 'network' }
+  }
+}
+
+/** Host validation codes (POST /feishu/config) mapped to dictionary keys. */
+const SERVER_ERROR_KEYS = {
+  invalidOutput: 'errInvalidOutput',
+  invalidShowImages: 'errInvalidShowImages',
+  invalidHoldTtl: 'errInvalidHoldTtl',
+  invalidMaxHeldImages: 'errInvalidMaxHeldImages',
+  invalidMaxHeldImageBytes: 'errInvalidMaxHeldImageBytes',
+  invalidLocale: 'errInvalidLocale',
+  appIdSaveFailed: 'errAppIdSaveFailed',
+  appSecretSaveFailed: 'errAppSecretSaveFailed',
+  network: 'errNetwork',
+  unknown: 'errUnknown',
+}
+
+/**
+ * Localized text for a failed host response. The host answers with a stable
+ * `code` plus an English `error` fallback and deliberately does not translate:
+ * its dictionary is one process-wide value shared by every browser tab, so it
+ * would reply in whichever language another tab reported last.
+ */
+function serverError(t, res) {
+  const key = SERVER_ERROR_KEYS[res && res.code]
+  if (key === undefined) return (res && res.error) || t('errUnknown')
+  return t(key).replace('{detail}', (res && res.detail) || '')
+}
+
+/**
+ * The Feishu surfaces each hold their own copy of /feishu/status, and a bind
+ * can also complete on the Feishu side (an inbound message binds a pending
+ * session) with nothing in the browser to observe it. Mutations broadcast here
+ * so every mounted surface re-reads.
+ */
+const refreshBus = new Set()
+function notifyRefresh() {
+  for (const listener of refreshBus) {
+    try { listener() } catch { /* one bad listener must not stop the rest */ }
+  }
 }
 
 const chipStyle = {
@@ -244,13 +321,28 @@ function FeishuSeat({ sessionId, t }) {
     }
   }, [sessionId])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    void refresh()
+    const listener = () => { void refresh() }
+    refreshBus.add(listener)
+    return () => { refreshBus.delete(listener) }
+  }, [refresh])
+
+  // A pending session is bound by the NEXT inbound Feishu message, which this
+  // browser cannot observe. Without polling the chip sat on "awaiting bind"
+  // indefinitely even though the binding had already succeeded.
+  useEffect(() => {
+    if (phase !== 'pending') return undefined
+    const timer = setInterval(() => { void refresh() }, 5000)
+    return () => clearInterval(timer)
+  }, [phase, refresh])
 
   const act = useCallback(async (path, payload) => {
     setBusy(true)
     try {
       await api(path, { method: 'POST', body: JSON.stringify(payload) })
       await refresh()
+      notifyRefresh()
     } finally {
       setBusy(false)
     }
@@ -315,8 +407,14 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     }
   }, [])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    void refresh()
+    const listener = () => { void refresh() }
+    refreshBus.add(listener)
+    return () => { refreshBus.delete(listener) }
+  }, [refresh])
 
+  /** @returns {Promise<boolean>} whether the host accepted the patch. */
   const saveConfig = async (patch) => {
     setBusy(true)
     setMsg(null)
@@ -325,11 +423,11 @@ function FeishuSection({ t, createSession, sessionTitles }) {
       if (res.ok) {
         setMsg({ ok: true, text: t('credResultOk') })
         await refresh()
-      } else {
-        setMsg({ ok: false, text: t('credResultFail').replace('{error}', res.error || '?') })
+        notifyRefresh()
+        return true
       }
-    } catch {
-      setMsg({ ok: false, text: t('credResultFail').replace('{error}', 'network') })
+      setMsg({ ok: false, text: t('credResultFail').replace('{error}', serverError(t, res)) })
+      return false
     } finally {
       setBusy(false)
     }
@@ -337,7 +435,12 @@ function FeishuSection({ t, createSession, sessionTitles }) {
 
   const toggleAuto = async (value) => {
     const res = await api('config', { method: 'POST', body: JSON.stringify({ autoBindNewSession: value }) })
-    if (res.ok) await refresh()
+    if (res.ok) {
+      await refresh()
+      return
+    }
+    // Previously silent: the checkbox just snapped back with no explanation.
+    setMsg({ ok: false, text: t('credResultFail').replace('{error}', serverError(t, res)) })
   }
 
   const saveCredentials = async () => {
@@ -345,9 +448,12 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     if (appId.trim() !== '') patch.appId = appId.trim()
     if (appSecret.trim() !== '') patch.appSecret = appSecret.trim()
     if (Object.keys(patch).length === 0) return
-    await saveConfig(patch)
-    setAppId('')
-    setAppSecret('')
+    // Clear the inputs only once the host accepted them; clearing
+    // unconditionally destroyed what the user typed on every failed save.
+    if (await saveConfig(patch)) {
+      setAppId('')
+      setAppSecret('')
+    }
   }
 
   const saveHoldTtl = () => { if (holdTtl.trim() !== '') void saveConfig({ holdTtlSeconds: Number(holdTtl) }) }
@@ -359,6 +465,7 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     try {
       await api('unbind', { method: 'POST', body: JSON.stringify({ sessionId }) })
       await refresh()
+      notifyRefresh()
     } finally {
       setBusy(false)
     }
@@ -374,7 +481,9 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     }
   }
 
-  let desc = t('rowDescUnconfigured')
+  // status === null means the status fetch failed, which is not the same as
+  // "no credentials configured" — that used to be the message for both.
+  let desc = t('rowDescConnecting')
   if (status !== null) {
     if (status.connected) {
       desc = t('rowDescConnected')
@@ -501,7 +610,7 @@ function FeishuSection({ t, createSession, sessionTitles }) {
   const credInfo = cfg !== null && cfg.credentials !== undefined ? cfg.credentials : null
   const appIdInfo = credInfo !== null ? credInfo.appId : null
   const secretInfo = credInfo !== null ? credInfo.appSecret : null
-  const readonlyNote = (info) => (info && info.writable === false ? '（' + t('credReadonly') + '）' : '')
+  const readonlyNote = (info) => (info && info.writable === false ? t('parenNote').replace('{text}', t('credReadonly')) : '')
   const sourceLine = t('credAppId') + ': ' + credSourceOf(appIdInfo) + readonlyNote(appIdInfo)
     + ' · ' + t('credAppSecret') + ': ' + credSourceOf(secretInfo) + readonlyNote(secretInfo)
 
@@ -651,7 +760,7 @@ function FeishuSection({ t, createSession, sessionTitles }) {
         numberRow(t('maxHeldImageBytesLabel'), maxMb, setMaxMb, saveMaxMb, 0.001),
       ),
       h('div', { style: lineStyle },
-        h('span', { style: labelStyle }, t('quickAction') + '：' + t('rowCreateSession')),
+        h('span', { style: labelStyle }, t('labelValue').replace('{label}', t('quickAction')).replace('{value}', t('rowCreateSession'))),
         h('button', {
           style: { ...linkButtonStyle, fontWeight: 600 },
           title: t('rowCreateSessionHint'),
@@ -969,12 +1078,15 @@ function apply(ctx) {
       const sessionId = String(data.sessionId || '')
       const url = imageUrl(sessionId, name)
       const [failed, setFailed] = useState(false)
-      const missing = (() => { try { return ctx.locale.bind(NS)('imgNodeMissing') } catch { return 'missing' } })()
-      const openHint = (() => { try { return ctx.locale.bind(NS)('imgOpen') } catch { return 'open' } })()
+      // Fall back to the zh dictionary rather than a bare English literal:
+      // an untranslated 'missing'/'open' leaked into both languages.
+      const nodeText = (key) => { try { return ctx.locale.bind(NS)(key) } catch { return zh[key] } }
+      const missing = nodeText('imgNodeMissing')
+      const openHint = nodeText('imgOpen')
       const caption = imageCaption(data.fileName, name, data.bytes)
       if (failed || name === '' || sessionId === '') {
         return h('div', { style: { padding: '8px 0', fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)' } },
-          caption + (failed ? '（' + missing + '）' : ''))
+          caption + (failed ? nodeText('parenNote').replace('{text}', missing) : ''))
       }
       return h('div', { style: { padding: '8px 0' } },
         h('img', {
@@ -1090,7 +1202,10 @@ function apply(ctx) {
     locale: NS,
     label: () => ctx.locale.bind(NS)('nav'),
     inject: () => ({
-      createSession: () => void createConnectedSession(),
+      // Return the promise: `void` discarded it, so the settings page awaited
+      // undefined, flashed busy for one tick and reported success even when
+      // session creation had failed.
+      createSession: () => createConnectedSession(),
       // DSH workspace display titles (the session list rows), so the bindings
       // table can show e.g. "继续开发插件" instead of the Feishu chat name.
       sessionTitles: () => {
