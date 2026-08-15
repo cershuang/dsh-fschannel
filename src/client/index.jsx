@@ -279,8 +279,16 @@ function makeGate() {
     close() { current += 1 },
   }
 }
-function notifyRefresh() {
+/**
+ * Tell the other surfaces to re-read.
+ * @param {Function} [source] - the caller's own listener, skipped. Callers
+ *   already awaited their own refresh(), so broadcasting to themselves fired a
+ *   second one concurrently with no ordering between the two — whichever
+ *   response landed last won, regardless of which was issued first.
+ */
+function notifyRefresh(source) {
   for (const listener of refreshBus) {
+    if (listener === source) continue
     try { listener() } catch { /* one bad listener must not stop the rest */ }
   }
 }
@@ -340,12 +348,14 @@ function FeishuSeat({ sessionId, t }) {
     }
   }, [sessionId, gate])
 
+  const self = useMemo(() => ({ listener: undefined }), [])
   useEffect(() => {
     void refresh()
     const listener = () => { void refresh() }
+    self.listener = listener
     refreshBus.add(listener)
-    return () => { refreshBus.delete(listener); gate.close() }
-  }, [refresh, gate])
+    return () => { refreshBus.delete(listener); self.listener = undefined; gate.close() }
+  }, [refresh, gate, self])
 
   // A pending session is bound by the NEXT inbound Feishu message, which this
   // browser cannot observe. Without polling the chip sat on "awaiting bind"
@@ -361,7 +371,7 @@ function FeishuSeat({ sessionId, t }) {
     try {
       await api(path, { method: 'POST', body: JSON.stringify(payload) })
       await refresh()
-      notifyRefresh()
+      notifyRefresh(self.listener)
     } finally {
       setBusy(false)
     }
@@ -426,12 +436,14 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     }
   }, [])
 
+  const self = useMemo(() => ({ listener: undefined }), [])
   useEffect(() => {
     void refresh()
     const listener = () => { void refresh() }
+    self.listener = listener
     refreshBus.add(listener)
-    return () => { refreshBus.delete(listener) }
-  }, [refresh])
+    return () => { refreshBus.delete(listener); self.listener = undefined }
+  }, [refresh, self])
 
   /** @returns {Promise<boolean>} whether the host accepted the patch. */
   const saveConfig = async (patch) => {
@@ -442,7 +454,7 @@ function FeishuSection({ t, createSession, sessionTitles }) {
       if (res.ok) {
         setMsg({ ok: true, text: t('credResultOk') })
         await refresh()
-        notifyRefresh()
+        notifyRefresh(self.listener)
         return true
       }
       setMsg({ ok: false, text: t('credResultFail').replace('{error}', serverError(t, res)) })
@@ -484,7 +496,7 @@ function FeishuSection({ t, createSession, sessionTitles }) {
     try {
       await api('unbind', { method: 'POST', body: JSON.stringify({ sessionId }) })
       await refresh()
-      notifyRefresh()
+      notifyRefresh(self.listener)
     } finally {
       setBusy(false)
     }

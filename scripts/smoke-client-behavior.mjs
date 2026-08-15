@@ -57,6 +57,23 @@ const useMemo = (factory, deps) => {
  * meaningless.
  */
 const resetState = () => { unmount(); stateSlots = []; renderPass = 0 }
+/**
+ * Mount/re-render a NAMED component instance. The mock keeps one slot array, so
+ * without this two different components rendered in sequence read each other's
+ * hook slots — which makes any multi-surface assertion meaningless.
+ */
+const instances = new Map()
+const useInstance = (name) => {
+  if (!instances.has(name)) instances.set(name, [])
+  stateSlots = instances.get(name)
+  renderPass = 0
+}
+/**
+ * Unmount everything before starting a fresh set of instances. Cleanups must be
+ * RUN, not dropped: a discarded cleanup leaves its bus listener registered, and
+ * those accumulate across scenarios until any broadcast assertion is nonsense.
+ */
+const resetInstances = () => { unmount(); instances.clear() }
 const reRender = () => { renderPass = 0 }
 const unmount = () => { while (cleanups.length > 0) { const fn = cleanups.pop(); if (typeof fn === 'function') fn() } }
 
@@ -346,6 +363,43 @@ if (!poll.cleared) throw new Error('poll timer not cleared on unmount')
     throw new Error("session A's late response wrote 'bound' into session B's chip")
   }
   installFetch()
+}
+
+// ── a mutation refreshes the OTHER surface, not itself twice ──────────────
+// act()/saveConfig()/detach() already await their own refresh(); broadcasting
+// to themselves as well fired a second one concurrently, with no ordering
+// between the two responses.
+{
+  resetInstances()
+  statusPayload = { ok: true, connected: true, configured: true, bindings: [], pending: [] }
+  installFetch()
+
+  const Seat = registered.find((opts) => opts && opts.id === 'feishu-bind').view
+  const Section = registered.find((opts) => opts && opts.id === 'feishu').view
+
+  useInstance('seat')
+  Seat({ sessionId: 'sess-1', t: (k) => k })
+  await settle()
+  useInstance('section')
+  Section({ t: (k) => k, createSession: async () => {} })
+  await settle()
+
+  fetchCalls = []
+  useInstance('seat')
+  const view = Seat({ sessionId: 'sess-1', t: (k) => k })
+  const chip = walk(view).find((n) => typeof n === 'object' && n.props && typeof n.props.onClick === 'function')
+  if (chip === undefined) throw new Error('seat chip has no onClick')
+  chip.props.onClick()
+  await settle()
+  await settle()
+
+  // One read for the seat's own refresh, one for the section answering the
+  // broadcast. Three means the seat also answered its own.
+  const statusReads = fetchCalls.filter((c) => c.method === 'GET' && c.url.includes('/status')).length
+  if (statusReads > 2) {
+    throw new Error('a mutation caused ' + statusReads + ' status reads; the caller answered its own broadcast')
+  }
+  if (statusReads < 2) throw new Error('the other surface did not refresh: ' + statusReads + ' status reads')
 }
 
 console.log('CLIENT BEHAVIOR SMOKE OK (locale reporting, dictionary parity, api failures, pending poll)')
