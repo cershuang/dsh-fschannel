@@ -110,4 +110,29 @@ console.log('RENDER SMOKE OK')
 
 }
 
+// ── oversized tables degrade to markdown, never truncate ──────────────────
+{
+  const header = ['| a | b |', '|---|---|']
+  const bigRows = []
+  for (let n = 0; n < 5000; n += 1) bigRows.push(`| r${n} | v${n} |`)
+  const big = header.concat(bigRows).join(String.fromCharCode(10))
+  const bigCard = renderFinalCard(big)
+  if (bigCard.body.elements.some((e) => e.tag === 'table')) {
+    throw new Error('a 5000-row table was still emitted as a card table')
+  }
+  // Degrade, do not truncate: every row must still be in the markdown.
+  const text = bigCard.body.elements.map((e) => e.content).join('')
+  if (!text.includes('r4999')) throw new Error('oversized table lost rows instead of degrading')
+  if (!text.includes('r0')) throw new Error('oversized table lost its first row')
+
+  // A normal table is untouched — the cap must not catch ordinary answers.
+  const smallRows = []
+  for (let n = 0; n < 199; n += 1) smallRows.push(`| r${n} | v${n} |`)
+  const small = renderFinalCard(header.concat(smallRows).join(String.fromCharCode(10)))
+  if (small.body.elements.filter((e) => e.tag === 'table').length !== 1) {
+    throw new Error('a 199-row table was wrongly degraded')
+  }
+}
+
 console.log('RENDER FENCE + SUPPRESSION OK')
+console.log('RENDER TABLE CAP OK')
