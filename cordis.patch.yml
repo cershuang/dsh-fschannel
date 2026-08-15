@@ -37,6 +37,8 @@
 #                  adjustable at runtime in the settings page)
 #   bindingsFile   durable binding store path (default $DSH_HOME/feishu-bindings.json;
 #                  override via FSCHANNEL_BINDINGS_FILE in .env)
+#   sendImageTool  register the send_feishu_image tool so the agent can send
+#                  generated images to the bound chat (default true)
 
 - insert:
     - id: feishu-bot

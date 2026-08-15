@@ -22,6 +22,7 @@
 - **表情反馈**：收到消息时在消息上自动加 👍，该回合完成变 ✅、失败变 ☹️（可配置 emoji 与开关；仅在你自己的消息上生效，Web 触发的回合不会误换）
 - **图片暂存识别**：飞书图片先暂存不处理，等你的下一条文字消息到达后，把图片路径连同识别指令一起发给 agent —— agent 加载 vision-tools 技能并调用视觉识别工具（vision_glance/vision_ocr 等）逐张识别，结合文字回答（需已安装 @anionex/dsh-vision-toolkit 且 runtime 就绪；图片保存在会话工作区的 `.dsh-fschannel-images/`）
 - **会话图片画廊**：会话头部「飞书图片」按钮打开该会话的图片网格（点击查看原图）。图片元数据由插件自管（`feishu-bindings.json`），**不再写入会话日志** —— 旧版本写入的 `feishu/image` 事件类型不为 harness 所知，会导致整个会话历史无法加载；v0.1.5.3 起插件在启动时自动修复历史日志（给这类事件补上 harness 认可的 `ignorable` 标记），并自动补录历史图片索引
+- **机器人发送图片**：agent 在回合中生成图片（图表、裁剪、代码渲染的 PNG 等）后，可调用 `send_feishu_image` 工具把图片发送到绑定的飞书聊天（可附带说明文字）；发送的图片同时进入该会话的 Web 画廊。图片路径必须位于会话工作区内（防穿越），支持 PNG/JPEG/WebP/GIF；`sendImageTool: false` 可关闭此工具
 - 群聊默认仅响应 @ 机器人（`requireMention`）；未绑定聊天收到引导提示（可关）
 
 ### 飞书侧模型控制
@@ -204,6 +205,7 @@ node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock ap
 - `lib/render.js` — markdown 分段与最终结果卡片渲染
 - `lib/repair.js` — 历史会话日志修复（zstd 帧解码、外来事件、seq 冲突）
 - `lib/locales.js` — 飞书侧文案（zh/en，跟随宿主语言）
+- `lib/send-image-tool.js` — `send_feishu_image` 工具（agent 发送生成图片到绑定聊天）
 - `src/client/index.jsx` → `lib/client.js` — 浏览器端：会话头 chip + 设置行
 
 ---
