@@ -49,6 +49,8 @@ const zh = {
   rowCreateSessionHint: '立即新建一个会话并进入待绑定状态（在飞书发一条消息完成绑定；60 秒内未创建会话将自动取消）',
   pendingTitle: '待绑定会话（给机器人发一条消息完成绑定）',
   pendingDelete: '取消待绑定',
+  pendingBadge: '待绑定',
+  pendingTimePrefix: '创建于 ',
   pendingJustNow: '刚刚',
   pendingTime: '{n} 分钟前',
   pendingTimeHours: '{n} 小时前',
@@ -61,6 +63,11 @@ const zh = {
   detach: '断开',
   chatUnknown: '未知聊天',
   sessionShort: '会话',
+  // bindings table
+  thChatId: '聊天 ocID',
+  thSession: '会话',
+  thName: '会话名称（DSH）',
+  thAction: '操作',
   // credentials block
   credTitle: '连接凭据',
   credAppId: 'App ID',
@@ -86,6 +93,12 @@ const zh = {
   // image node
   imgNodeMissing: '图片文件已不存在',
   imgOpen: '点击打开原图',
+  // gallery
+  galleryOpen: '飞书图片',
+  galleryTitle: '飞书图片（{n}）',
+  galleryEmpty: '此会话暂无飞书图片',
+  galleryLoading: '加载中…',
+  galleryClose: '关闭',
 }
 
 const en = {
@@ -114,6 +127,8 @@ const en = {
   rowCreateSessionHint: 'Create a session right away and mark it pending (send the bot a message in Feishu to bind; auto-cancelled when no session appears within 60s)',
   pendingTitle: 'Pending sessions (send the bot a message to bind)',
   pendingDelete: 'Cancel',
+  pendingBadge: 'pending',
+  pendingTimePrefix: 'created ',
   pendingJustNow: 'just now',
   pendingTime: '{n} min ago',
   pendingTimeHours: '{n} h ago',
@@ -126,6 +141,11 @@ const en = {
   detach: 'Detach',
   chatUnknown: 'unknown chat',
   sessionShort: 'Session',
+  // bindings table
+  thChatId: 'Chat ocID',
+  thSession: 'Session',
+  thName: 'Session title (DSH)',
+  thAction: 'Action',
   // credentials block
   credTitle: 'Credentials',
   credAppId: 'App ID',
@@ -151,6 +171,12 @@ const en = {
   // image node
   imgNodeMissing: 'image file no longer exists',
   imgOpen: 'click to open original',
+  // gallery
+  galleryOpen: 'Feishu images',
+  galleryTitle: 'Feishu images ({n})',
+  galleryEmpty: 'No Feishu images in this session',
+  galleryLoading: 'Loading…',
+  galleryClose: 'Close',
 }
 
 const NS = 'feishu'
@@ -266,7 +292,7 @@ function FeishuSeat({ sessionId, t }) {
 
 // ── settings section (dedicated tab) ─────────────────────────────────────
 
-function FeishuSection({ t, createSession }) {
+function FeishuSection({ t, createSession, sessionTitles }) {
   const [status, setStatus] = useState(null)
   const [cfg, setCfg] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -276,6 +302,8 @@ function FeishuSection({ t, createSession }) {
   const [holdTtl, setHoldTtl] = useState('')
   const [maxCount, setMaxCount] = useState('')
   const [maxMb, setMaxMb] = useState('')
+  // DSH-side session titles, refreshed whenever the section re-renders.
+  const titles = typeof sessionTitles === 'function' ? sessionTitles() : (sessionTitles || {})
 
   const refresh = useCallback(async () => {
     const [s, c] = await Promise.all([api('status'), api('config')])
@@ -358,36 +386,45 @@ function FeishuSection({ t, createSession }) {
     }
   }
 
-  const pageStyle = { maxWidth: 720, padding: '2px 0' }
-  const blockStyle = { marginBottom: 26 }
-  const blockTitleStyle = { fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-primary, #eee)', marginBottom: 4 }
+  const pageStyle = { maxWidth: 720, padding: '2px 0', display: 'flex', flexDirection: 'column', gap: 16 }
+  const cardStyle = {
+    background: 'var(--dsw-alias-bg-l2, #1a1a1c)',
+    border: '1px solid var(--dsw-alias-border-l2, #333)',
+    borderRadius: 10,
+    padding: '14px 16px',
+  }
+  const blockTitleStyle = { fontSize: 13, fontWeight: 600, color: 'var(--dsw-alias-label-primary, #eee)', marginBottom: 10 }
+  const cardHeadStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }
   const lineStyle = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 16,
-    padding: '10px 0',
+    padding: '9px 0',
     borderBottom: '1px solid var(--dsw-alias-border-l2, #2a2a2a)',
     fontSize: 13,
   }
   const labelStyle = { color: 'var(--dsw-alias-label-secondary, #bbb)', minWidth: 0 }
   const valueStyle = { color: 'var(--dsw-alias-label-primary, #eee)', minWidth: 0, textAlign: 'right' }
   const inputStyle = {
-    background: 'var(--dsw-alias-bg-l2, #1e1e1e)',
+    background: 'var(--dsw-alias-bg-l1, #141416)',
     border: '1px solid var(--dsw-alias-border-l2, #444)',
     borderRadius: 6,
     color: 'var(--dsw-alias-label-primary, #eee)',
-    padding: '5px 8px',
+    padding: '5px 9px',
     fontSize: 12,
-    width: 200,
+    width: 220,
+    height: 30,
+    boxSizing: 'border-box',
   }
-  const numInputStyle = { ...inputStyle, width: 90 }
+  const numInputStyle = { ...inputStyle, width: 92 }
   const segStyle = {
     border: '1px solid var(--dsw-alias-border-l2, #444)',
     borderRadius: 6,
-    padding: '4px 10px',
+    padding: '5px 12px',
     fontSize: 12,
     cursor: 'pointer',
+    background: 'transparent',
   }
   const primaryButtonStyle = {
     background: 'var(--dsw-alias-state-business-primary, #6b9bff)',
@@ -395,11 +432,61 @@ function FeishuSection({ t, createSession }) {
     borderRadius: 6,
     color: '#fff',
     cursor: 'pointer',
-    padding: '6px 14px',
+    padding: '6px 16px',
     fontSize: 12,
     fontWeight: 600,
+    height: 30,
   }
-  const msgStyle = (ok) => ({ fontSize: 12, color: ok ? '#4caf7d' : '#e06c6c', alignSelf: 'center' })
+  const msgStyle = (ok) => ({ fontSize: 12, color: ok ? '#4caf7d' : '#e06c6c', alignItems: 'center' })
+  // Bindings table.
+  const tableGridCols = 'minmax(120px, 1.1fr) minmax(150px, 1.3fr) minmax(140px, 1.8fr) 64px'
+  const tableHeadStyle = {
+    display: 'grid',
+    gridTemplateColumns: tableGridCols,
+    gap: 10,
+    padding: '5px 0',
+    borderBottom: '1px solid var(--dsw-alias-border-l2, #333)',
+    color: 'var(--dsw-alias-label-tertiary, #999)',
+    fontSize: 11,
+    fontWeight: 600,
+  }
+  const tableRowStyle = {
+    display: 'grid',
+    gridTemplateColumns: tableGridCols,
+    gap: 10,
+    alignItems: 'center',
+    padding: '8px 0',
+    borderBottom: '1px solid var(--dsw-alias-border-l2, #2a2a2a)',
+    fontSize: 12.5,
+  }
+  const cellMonoStyle = {
+    fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+    fontSize: 11.5,
+    color: 'var(--dsw-alias-label-secondary, #bbb)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  }
+  const cellNameStyle = {
+    color: 'var(--dsw-alias-label-primary, #eee)',
+    wordBreak: 'break-word',
+    minWidth: 0,
+  }
+  const cellNameFallbackStyle = {
+    ...cellNameStyle,
+    color: 'var(--dsw-alias-label-tertiary, #999)',
+    fontStyle: 'italic',
+  }
+  const actionCellStyle = { textAlign: 'right' }
+  const pendingBadgeStyle = {
+    background: 'rgba(229, 182, 92, 0.14)',
+    color: '#e5b65c',
+    borderRadius: 999,
+    padding: '2px 9px',
+    fontSize: 11,
+    whiteSpace: 'nowrap',
+    justifySelf: 'start',
+  }
 
   // Credential source labels; never exposes the secret itself.
   const effectiveSource = status !== null ? status.credentialSource : undefined
@@ -425,6 +512,7 @@ function FeishuSection({ t, createSession }) {
       ...segStyle,
       background: cfg !== null && cfg.output === mode ? 'var(--dsw-alias-state-business-primary, #6b9bff)' : 'transparent',
       color: cfg !== null && cfg.output === mode ? '#fff' : 'var(--dsw-alias-label-secondary, #bbb)',
+      ...(cfg !== null && cfg.output === mode ? { borderColor: 'var(--dsw-alias-state-business-primary, #6b9bff)' } : {}),
     },
     disabled: busy || cfg === null,
     onClick: () => { if (cfg !== null && cfg.output !== mode) void saveConfig({ output: mode }) },
@@ -439,27 +527,53 @@ function FeishuSection({ t, createSession }) {
       ),
     )
 
-  const bindingRow = (entry, actionLabel, onAction) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 13 } },
-    h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-secondary, #bbb)' } },
-      entry.chatName || entry.chatId,
-      h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } },
-        ' · ' + t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…'),
-    ),
-    h('button', { style: linkButtonStyle, onClick: () => void onAction() }, actionLabel),
-  )
+  /**
+   * One bound-chat table row: chat ocID (short) | session (short) | DSH
+   * session title (full) | detach action. Full ids are exposed via title
+   * tooltips. The name column shows the DSH workspace title (the session list
+   * row, e.g. "继续开发插件"); the Feishu chat name is a fallback when the
+   * session has no title yet.
+   * @param {{ chatId: string, chatName?: string, sessionId: string }} entry
+   */
+  const bindingRow = (entry, actionLabel, onAction) => {
+    const dshTitle = typeof titles[entry.sessionId] === 'string' && titles[entry.sessionId] !== '' ? titles[entry.sessionId] : undefined
+    const name = dshTitle !== undefined
+      ? h('span', { style: cellNameStyle, title: dshTitle }, dshTitle)
+      : typeof entry.chatName === 'string' && entry.chatName !== ''
+        ? h('span', { style: cellNameStyle, title: entry.chatName }, entry.chatName)
+        : h('span', { style: cellNameFallbackStyle, title: t('chatUnknown') + ' — ' + entry.chatId },
+            shortId(entry.chatId, 14, 6))
+    return h('div', { key: entry.sessionId, style: tableRowStyle },
+      h('span', { style: cellMonoStyle, title: entry.chatId }, shortId(entry.chatId, 6, 4)),
+      h('span', { style: cellMonoStyle, title: entry.sessionId }, shortId(entry.sessionId, 10, 4)),
+      name,
+      h('span', { style: actionCellStyle },
+        h('button', { style: linkButtonStyle, onClick: () => void onAction() }, actionLabel)),
+    )
+  }
 
-  const pendingRow = (entry) => h('div', { key: entry.sessionId, style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 13 } },
-    h('span', { style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dsw-alias-label-secondary, #bbb)' } },
-      t('sessionShort') + ' ' + String(entry.sessionId).slice(0, 8) + '…',
-      h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #999)' } }, ' · ' + pendingTimeLabel(entry.at, t)),
-    ),
-    h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('pendingDelete')),
+  /**
+   * One pending-session table row: a "pending" badge | session (short) |
+   * relative created time | cancel action.
+   * @param {{ sessionId: string, at: number }} entry
+   */
+  const pendingRow = (entry) => h('div', { key: entry.sessionId, style: tableRowStyle },
+    h('span', { style: pendingBadgeStyle }, t('pendingBadge')),
+    h('span', { style: cellMonoStyle, title: entry.sessionId }, shortId(entry.sessionId, 10, 4)),
+    h('span', { style: { ...cellNameStyle, color: 'var(--dsw-alias-label-tertiary, #999)' } },
+      t('pendingTimePrefix') + pendingTimeLabel(entry.at, t)),
+    h('span', { style: actionCellStyle },
+      h('button', { style: linkButtonStyle, onClick: () => void detach(entry.sessionId) }, t('pendingDelete'))),
   )
 
   return h('div', { style: pageStyle },
-    h('div', { style: blockStyle },
-      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
-        h('div', { style: blockTitleStyle }, t('sectionStatus')),
+    // Status card
+    h('div', { style: cardStyle },
+      h('div', { style: cardHeadStyle },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          h('span', { style: dotStyle(status !== null && status.connected ? '#4caf7d' : status !== null ? '#e06c6c' : '#8a8f98') }),
+          h('div', { style: blockTitleStyle }, t('sectionStatus')),
+        ),
         h('button', { style: linkButtonStyle, onClick: () => void refresh() }, t('rowRefresh')),
       ),
       h('div', { style: lineStyle },
@@ -467,7 +581,8 @@ function FeishuSection({ t, createSession }) {
         h('span', { style: valueStyle }, desc),
       ),
     ),
-    h('div', { style: blockStyle },
+    // Credentials card
+    h('div', { style: cardStyle },
       h('div', { style: blockTitleStyle }, t('credTitle')),
       h('div', { style: lineStyle },
         h('span', { style: labelStyle }, t('credAppId')),
@@ -502,7 +617,8 @@ function FeishuSection({ t, createSession }) {
         }, busy ? t('credSaving') : t('credSave')),
       ),
     ),
-    h('div', { style: blockStyle },
+    // Preferences card
+    h('div', { style: cardStyle },
       h('div', { style: blockTitleStyle }, t('sectionPreference')),
       h('div', { style: lineStyle },
         h('span', { style: labelStyle }, t('rowAutoBind')),
@@ -529,7 +645,7 @@ function FeishuSection({ t, createSession }) {
           onChange: (event) => void saveConfig({ showImages: event.target.checked }),
         }),
       ),
-      h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2, #333)', paddingTop: 4 } },
+      h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2, #333)', paddingTop: 6 } },
         h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #999)', fontSize: 12, marginBottom: 2 } }, t('sectionStaging')),
         numberRow(t('holdTtlLabel'), holdTtl, setHoldTtl, saveHoldTtl, 0),
         numberRow(t('maxHeldImagesLabel'), maxCount, setMaxCount, saveMaxCount, 1),
@@ -545,25 +661,33 @@ function FeishuSection({ t, createSession }) {
         }, t('rowCreateSession')),
       ),
     ),
-    h('div', { style: blockStyle },
+    // Bindings card with table
+    h('div', { style: cardStyle },
       h('div', { style: blockTitleStyle }, t('sectionBindings')),
       status !== null && status.bindings && status.bindings.length === 0 && (!status.pending || status.pending.length === 0)
         ? h('div', { style: { padding: '6px 0', fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)' } }, t('rowNoBindings'))
-        : null,
-      (status ? status.bindings : []).map((entry) => bindingRow(entry, t('detach'), () => detach(entry.sessionId))),
-      status !== null && status.pending && status.pending.length > 0
-        ? h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsw-alias-border-l2, #333)', paddingTop: 6 } },
-            h('div', { style: { color: 'var(--dsw-alias-label-tertiary, #999)', fontSize: 12, marginBottom: 2 } }, t('pendingTitle')),
-            status.pending.map(pendingRow),
-          )
-        : null,
+        : h('div', {},
+            h('div', { style: tableHeadStyle },
+              h('span', {}, t('thChatId')),
+              h('span', {}, t('thSession')),
+              h('span', {}, t('thName')),
+              h('span', { style: { textAlign: 'right' } }, t('thAction')),
+            ),
+            (status ? status.bindings : []).map((entry) => bindingRow(entry, t('detach'), () => detach(entry.sessionId))),
+            status !== null && status.pending && status.pending.length > 0
+              ? status.pending.map(pendingRow)
+              : null,
+          ),
     ),
-    h('div', { style: blockStyle },
+    // Help card
+    h('div', { style: cardStyle },
       h('div', { style: blockTitleStyle }, t('sectionHelp')),
       h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary, #bbb)', lineHeight: 1.9, whiteSpace: 'pre-wrap' } }, t('sectionHelpText')),
     ),
     msg !== null
-      ? h('div', { style: { padding: '10px 0' } }, h('span', { style: msgStyle(msg.ok) }, msg.text))
+      ? h('div', { style: { display: 'flex', gap: 6, padding: '2px 0' } },
+          h('span', { style: dotStyle(msg.ok ? '#4caf7d' : '#e06c6c') }),
+          h('span', { style: msgStyle(msg.ok) }, msg.text))
       : null,
   )
 }
@@ -576,6 +700,73 @@ const imageNodeStyle = {
   borderRadius: 8,
   display: 'block',
   cursor: 'zoom-in',
+}
+
+// ── session image gallery (API-driven; no session-log events) ─────────────
+
+const galleryOverlayStyle = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0, 0, 0, 0.55)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 1000,
+  padding: 24,
+}
+const galleryPanelStyle = {
+  background: 'var(--dsw-surface, #1e1f24)',
+  border: '1px solid var(--dsw-alias-border-default, #333)',
+  borderRadius: 12,
+  maxWidth: 860,
+  width: '100%',
+  maxHeight: '80vh',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
+}
+const galleryHeaderStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '10px 14px',
+  borderBottom: '1px solid var(--dsw-alias-border-default, #333)',
+  fontSize: 14,
+  fontWeight: 600,
+  flex: 'none',
+}
+const galleryCloseStyle = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--dsw-alias-label-secondary, #bbb)',
+  cursor: 'pointer',
+  fontSize: 13,
+  padding: '2px 6px',
+}
+const galleryBodyStyle = {
+  padding: 24,
+  textAlign: 'center',
+  color: 'var(--dsw-alias-label-secondary, #bbb)',
+  fontSize: 13,
+}
+const galleryGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+  gap: 10,
+  padding: 14,
+  overflowY: 'auto',
+}
+const galleryCellStyle = {
+  borderRadius: 8,
+  overflow: 'hidden',
+}
+const galleryImageStyle = {
+  width: '100%',
+  height: 120,
+  objectFit: 'cover',
+  display: 'block',
+  cursor: 'zoom-in',
+  borderRadius: 8,
 }
 
 /** @param {number} bytes @returns {string} human-readable size. */
@@ -629,6 +820,19 @@ function pendingTimeLabel(at, t) {
   if (minutes < 1) return t('pendingJustNow')
   if (minutes < 60) return t('pendingTime').replace('{n}', String(minutes))
   return t('pendingTimeHours').replace('{n}', String(Math.floor(minutes / 60)))
+}
+
+/**
+ * Shorten a long id for table cells: keep head + tail around an ellipsis.
+ * Short values (<= head+tail+1 chars) pass through untouched.
+ * @param {string | undefined} id
+ * @param {number} [head] chars kept from the start.
+ * @param {number} [tail] chars kept from the end.
+ * @returns {string}
+ */
+function shortId(id, head = 8, tail = 4) {
+  if (typeof id !== 'string' || id === '') return ''
+  return id.length > head + tail + 1 ? id.slice(0, head) + '…' + id.slice(-tail) : id
 }
 
 const linkButtonStyle = {
@@ -754,6 +958,83 @@ function apply(ctx) {
     }, FeishuImageNodeView))
   }
 
+  // Session image gallery: images are no longer written into the session log
+  // (an unknown event type makes the harness refuse the whole log), so the
+  // gallery is API-driven. Old logs still carry feishu/image events — those
+  // render inline via feishuImageDefinition above; this button covers every
+  // session uniformly from the plugin's own image index.
+  const FeishuGalleryButton = ({ sessionId, t }) => {
+    const [open, setOpen] = useState(false)
+    const [images, setImages] = useState(null) // null = loading
+    const [count, setCount] = useState(-1) // -1 = unknown, 0 = hidden
+
+    const refresh = useCallback(async () => {
+      try {
+        const data = await api('images/' + encodeURIComponent(sessionId))
+        if (data.ok && Array.isArray(data.images)) {
+          setImages(data.images)
+          setCount(data.images.length)
+          return
+        }
+      } catch { /* best effort */ }
+      setImages([])
+      setCount(0)
+    }, [sessionId])
+
+    useEffect(() => { void refresh() }, [refresh])
+
+    const onOpen = () => {
+      setOpen(true)
+      void refresh() // re-fetch so a just-received image appears
+    }
+
+    if (count === 0) return null
+    return h(Fragment, {},
+      h('button', {
+        style: chipStyle,
+        title: t('galleryOpen'),
+        onClick: onOpen,
+        'data-testid': 'feishu-gallery',
+      }, t('galleryOpen')),
+      open ? h('div', {
+        style: galleryOverlayStyle,
+        onClick: () => setOpen(false),
+      }, h('div', {
+        style: galleryPanelStyle,
+        onClick: (event) => event.stopPropagation(),
+      },
+      h('div', { style: galleryHeaderStyle },
+        h('span', {}, t('galleryTitle').replace('{n}', String(count))),
+        h('button', { style: galleryCloseStyle, onClick: () => setOpen(false) }, t('galleryClose')),
+      ),
+      images === null ? h('div', { style: galleryBodyStyle }, t('galleryLoading'))
+        : images.length === 0 ? h('div', { style: galleryBodyStyle }, t('galleryEmpty'))
+          : h('div', { style: galleryGridStyle }, images.map((image) => {
+              const name = String(image.name || '')
+              const url = '/feishu/image/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(name)
+              const caption = [String(image.fileName || name), formatBytes(image.bytes)].filter(Boolean).join(' · ')
+              return h('div', { key: name, style: galleryCellStyle },
+                h('img', {
+                  src: url,
+                  alt: caption,
+                  title: caption,
+                  loading: 'lazy',
+                  style: galleryImageStyle,
+                  onClick: () => window.open(url, '_blank'),
+                }),
+                h('div', { style: { marginTop: 4, fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)' } }, caption),
+              )
+            })))) : null)
+  }
+
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'feishu-images',
+    order: 5,
+    locale: NS,
+    inject: () => ({}),
+  }, FeishuGalleryButton))
+
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions',
     id: 'feishu-bind',
@@ -768,7 +1049,24 @@ function apply(ctx) {
     order: 15,
     locale: NS,
     label: () => ctx.locale.bind(NS)('nav'),
-    inject: () => ({ createSession: () => void createConnectedSession() }),
+    inject: () => ({
+      createSession: () => void createConnectedSession(),
+      // DSH workspace display titles (the session list rows), so the bindings
+      // table can show e.g. "继续开发插件" instead of the Feishu chat name.
+      sessionTitles: () => {
+        try {
+          const byId = ctx.sessions.list.getSnapshot().byId || {}
+          const titles = {}
+          for (const id of Object.keys(byId)) {
+            const entry = byId[id]
+            if (entry && typeof entry.displayTitle === 'string' && entry.displayTitle !== '') titles[id] = entry.displayTitle
+          }
+          return titles
+        } catch {
+          return {}
+        }
+      },
+    }),
   }, FeishuSection))
 }
 
