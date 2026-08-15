@@ -161,7 +161,8 @@ node scripts/smoke-test.mjs     # 服务端冒烟（env/绑定/持久化）
 node scripts/smoke-client.mjs   # 客户端 bundle 冒烟
 node scripts/smoke-settings-render.mjs  # 设置页渲染冒烟（绑定表格 + 排版）
 node scripts/smoke-cards.mjs    # 模型卡片与触发词测试
-node scripts/smoke-repair.mjs   # 会话日志修复（feishu/image ignorable 标记）
+node scripts/smoke-repair.mjs   # 会话日志修复（feishu/image ignorable 标记 + seq 冲突）
+node scripts/audit-sessions.mjs # 全量审计所有会话日志的 seq 连续性
 node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock apiProxy）
 ```
 

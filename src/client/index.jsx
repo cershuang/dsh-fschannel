@@ -778,6 +778,24 @@ function formatBytes(bytes) {
 }
 
 /**
+ * Loopback URL for a staged image (shared by the inline node and the gallery).
+ * @param {string} sessionId @param {string} name
+ * @returns {string}
+ */
+function imageUrl(sessionId, name) {
+  return '/feishu/image/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(name)
+}
+
+/**
+ * Caption for a staged image: original file name (or staged name) + size.
+ * @param {string} fileName @param {string} name @param {number} bytes
+ * @returns {string}
+ */
+function imageCaption(fileName, name, bytes) {
+  return [String(fileName || name), formatBytes(bytes)].filter(Boolean).join(' · ')
+}
+
+/**
  * Conversation node Definition for host-appended feishu/image events. Each
  * staged file is unique, so every event starts its own node; the renderer
  * streams the bytes from the host loopback route.
@@ -929,11 +947,11 @@ function apply(ctx) {
       const data = (node !== null && node !== undefined && node.data) || {}
       const name = String(data.name || '')
       const sessionId = String(data.sessionId || '')
-      const url = '/feishu/image/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(name)
+      const url = imageUrl(sessionId, name)
       const [failed, setFailed] = useState(false)
       const missing = (() => { try { return ctx.locale.bind(NS)('imgNodeMissing') } catch { return 'missing' } })()
       const openHint = (() => { try { return ctx.locale.bind(NS)('imgOpen') } catch { return 'open' } })()
-      const caption = [String(data.fileName || name), formatBytes(data.bytes)].filter(Boolean).join(' · ')
+      const caption = imageCaption(data.fileName, name, data.bytes)
       if (failed || name === '' || sessionId === '') {
         return h('div', { style: { padding: '8px 0', fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)' } },
           caption + (failed ? '（' + missing + '）' : ''))
@@ -988,7 +1006,7 @@ function apply(ctx) {
       void refresh() // re-fetch so a just-received image appears
     }
 
-    if (count === 0) return null
+    if (count === 0 || (images === null && count < 0)) return null
     return h(Fragment, {},
       h('button', {
         style: chipStyle,
@@ -1011,8 +1029,8 @@ function apply(ctx) {
         : images.length === 0 ? h('div', { style: galleryBodyStyle }, t('galleryEmpty'))
           : h('div', { style: galleryGridStyle }, images.map((image) => {
               const name = String(image.name || '')
-              const url = '/feishu/image/' + encodeURIComponent(sessionId) + '/' + encodeURIComponent(name)
-              const caption = [String(image.fileName || name), formatBytes(image.bytes)].filter(Boolean).join(' · ')
+              const url = imageUrl(sessionId, name)
+              const caption = imageCaption(image.fileName, name, image.bytes)
               return h('div', { key: name, style: galleryCellStyle },
                 h('img', {
                   src: url,

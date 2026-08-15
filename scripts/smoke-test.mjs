@@ -49,7 +49,7 @@ if (shifted !== 'old-pending-session') throw new Error('FIFO shift wrong: ' + sh
 if (!store.removePending('sess-2')) throw new Error('removePending failed')
 store.unbind('sess-1')
 console.log('after ops:', JSON.stringify(store.status()))
-store.setAutoBindNewSession(true)
+store.setSettings({ autoBindNewSession: true })
 
 const store2 = new BindingStore(file, () => {})
 console.log('reloaded:', JSON.stringify(store2.status()))
