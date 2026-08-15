@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     var module = { exports: {} }
     const React = require('react')
-    const { useState, useEffect, useCallback } = React
+    const { useState, useEffect, useCallback, useMemo } = React
     const h = React.createElement
     const Fragment = React.Fragment
 
@@ -255,6 +255,30 @@ function serverError(t, res) {
  * so every mounted surface re-reads.
  */
 const refreshBus = new Set()
+
+/**
+ * Track which request is current for a surface. A refresh has no cancellation,
+ * so a response for session A could land after the user switched to B and write
+ * A's phase into B's state. Each refresh takes a ticket; only the newest one is
+ * allowed to write. The 5s pending poll and the bus broadcast both multiply the
+ * number of refreshes in flight, so this is not theoretical.
+ */
+function makeGate() {
+  // One gate per component INSTANCE, not per session: a gate keyed on
+  // sessionId would be replaced on a switch, leaving the previous session's
+  // in-flight call holding the old gate — which still thinks it is current.
+  let current = 0
+  return {
+    /** @returns {() => boolean} true while this call is still the newest. */
+    open() {
+      current += 1
+      const mine = current
+      return () => mine === current
+    },
+    /** Invalidate every in-flight call, e.g. on unmount. */
+    close() { current += 1 },
+  }
+}
 function notifyRefresh() {
   for (const listener of refreshBus) {
     try { listener() } catch { /* one bad listener must not stop the rest */ }
@@ -293,8 +317,11 @@ function FeishuSeat({ sessionId, t }) {
   const [record, setRecord] = useState(null)
   const [busy, setBusy] = useState(false)
 
+  const gate = useMemo(makeGate, [])
   const refresh = useCallback(async () => {
+    const fresh = gate.open()
     const data = await api('status')
+    if (!fresh()) return
     if (!data.ok) {
       setPhase('unbound')
       setRecord(null)
@@ -311,14 +338,14 @@ function FeishuSeat({ sessionId, t }) {
       setPhase('unbound')
       setRecord(null)
     }
-  }, [sessionId])
+  }, [sessionId, gate])
 
   useEffect(() => {
     void refresh()
     const listener = () => { void refresh() }
     refreshBus.add(listener)
-    return () => { refreshBus.delete(listener) }
-  }, [refresh])
+    return () => { refreshBus.delete(listener); gate.close() }
+  }, [refresh, gate])
 
   // A pending session is bound by the NEXT inbound Feishu message, which this
   // browser cannot observe. Without polling the chip sat on "awaiting bind"
@@ -1115,20 +1142,27 @@ function apply(ctx) {
     const [images, setImages] = useState(null) // null = loading
     const [count, setCount] = useState(-1) // -1 = unknown, 0 = hidden
 
+    const gate = useMemo(makeGate, [])
     const refresh = useCallback(async () => {
+      const fresh = gate.open()
       try {
         const data = await api('images/' + encodeURIComponent(sessionId))
+        if (!fresh()) return
         if (data.ok && Array.isArray(data.images)) {
           setImages(data.images)
           setCount(data.images.length)
           return
         }
       } catch { /* best effort */ }
+      if (!fresh()) return
       setImages([])
       setCount(0)
-    }, [sessionId])
+    }, [sessionId, gate])
 
-    useEffect(() => { void refresh() }, [refresh])
+    useEffect(() => {
+      void refresh()
+      return () => { gate.close() }
+    }, [refresh, gate])
 
     const onOpen = () => {
       setOpen(true)

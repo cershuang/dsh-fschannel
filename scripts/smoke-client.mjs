@@ -25,6 +25,7 @@ const fakeReact = {
   useState: () => [undefined, () => {}],
   useEffect: () => {},
   useCallback: (fn) => fn,
+  useMemo: (factory) => factory(),
 }
 
 require.cache = require.cache || {}

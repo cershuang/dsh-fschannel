@@ -38,6 +38,7 @@ const fakeReact = {
   useState,
   useEffect: (cb) => { void cb() },
   useCallback: (fn) => fn,
+  useMemo: (factory) => factory(),
 }
 
 // Loaded for its side effect: the bundle calls window.__ModuleLoader__.load().

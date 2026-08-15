@@ -39,6 +39,16 @@ const useState = (init) => {
   renderPass += 1
   return [slot.value, (v) => { slot.value = v }]
 }
+/** Slot-based useMemo: recompute only when a dependency changed. */
+const useMemo = (factory, deps) => {
+  if (renderPass >= stateSlots.length) stateSlots.push({ value: undefined, deps: undefined })
+  const slot = stateSlots[renderPass]
+  renderPass += 1
+  const stale = slot.deps === undefined || deps === undefined
+    || deps.length !== slot.deps.length || deps.some((d, i) => d !== slot.deps[i])
+  if (stale) { slot.value = factory(); slot.deps = deps }
+  return slot.value
+}
 const resetState = () => { stateSlots = []; renderPass = 0; cleanups = [] }
 const reRender = () => { renderPass = 0 }
 const unmount = () => { while (cleanups.length > 0) { const fn = cleanups.pop(); if (typeof fn === 'function') fn() } }
@@ -51,6 +61,7 @@ const fakeReact = {
   // are observable at all.
   useEffect: (cb) => { const c = cb(); if (typeof c === 'function') cleanups.push(c) },
   useCallback: (fn) => fn,
+  useMemo,
 }
 
 // ── fetch recorder ────────────────────────────────────────────────────────
@@ -245,5 +256,52 @@ if (!fetchCalls.some((call) => call.url.includes('/status'))) throw new Error('p
 
 unmount()
 if (!poll.cleared) throw new Error('poll timer not cleared on unmount')
+
+// ── a superseded session's response must not write state ──────────────────
+// refresh() has no cancellation. A response for session A that lands after the
+// user switched to B used to write A's phase into B's state — and the 5s poll
+// plus the bus broadcast multiply how many are in flight at once.
+{
+  resetState()
+  timers.length = 0
+
+  // Hold the first /status response open so it can land late.
+  let releaseFirst
+  const firstPending = new Promise((resolve) => { releaseFirst = resolve })
+  let call = 0
+  globalThis.fetch = async (url) => {
+    call += 1
+    if (call === 1) {
+      await firstPending
+      // Session A is bound — if this lands, the chip goes to 'bound'.
+      return { json: async () => ({ ok: true, connected: true, configured: true, bindings: [{ sessionId: 'sess-A', chatId: 'oc_a' }], pending: [] }) }
+    }
+    // Session B is unbound.
+    return { json: async () => ({ ok: true, connected: true, configured: true, bindings: [], pending: [] }) }
+  }
+
+  const seatOpts = registered.find((opts) => opts && opts.id === 'feishu-bind')
+  const Seat = seatOpts.view
+  Seat({ sessionId: 'sess-A', t: (k) => k })   // starts the held request
+  await settle()
+
+  // The user switches session: same slot, new sessionId, new gate.
+  reRender()
+  Seat({ sessionId: 'sess-B', t: (k) => k })
+  await settle()
+
+  // Now A's response finally arrives.
+  releaseFirst()
+  await settle()
+  await settle()
+
+  reRender()
+  const view = Seat({ sessionId: 'sess-B', t: (k) => k })
+  const labels = walk(view).filter((n) => typeof n === 'string')
+  if (labels.includes('seatBound')) {
+    throw new Error("session A's late response wrote 'bound' into session B's chip")
+  }
+  installFetch()
+}
 
 console.log('CLIENT BEHAVIOR SMOKE OK (locale reporting, dictionary parity, api failures, pending poll)')
