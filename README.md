@@ -90,7 +90,7 @@ dsh web
 
 凭据解析优先级：插件配置 `appId/appSecret` > 凭据服务（shell 导出的环境变量 > DSH 凭据库 `$DSH_HOME/.credentials.yaml` > 项目 `.env` > `~/.dsh/.env`）> 插件 `envFile`。**推荐做法**：在设置页「飞书机器人 → 连接凭据」填写 appId/appSecret，保存到凭据库（appId 仅显示掩码，secret 永不回显；`.env` 中不要再放凭据）。
 
-**路径配置（放 `.env`，不入库）**：`FSCHANNEL_REPO`（插件仓库根目录，脚本/重启用）、`FSCHANNEL_ENV_FILE`（.env 自身路径，默认取工作目录）、`FSCHANNEL_BINDINGS_FILE`（绑定数据文件，默认 `$DSH_HOME/feishu-bindings.json`）。`cordis.patch.yml` 的 `envFile` 解析顺序：`FSCHANNEL_ENV_FILE` 环境变量（由 `scripts/restart-web.ps1` 从 .env 导出）→ `<cwd>/.env`。
+**路径配置（放 `.env`，不入库）**：`FSCHANNEL_REPO`（插件仓库根目录，脚本/重启用）、`FSCHANNEL_ENV_FILE`（.env 自身路径，默认取工作目录）、`FSCHANNEL_BINDINGS_FILE`（绑定数据文件，默认 `$DSH_HOME/feishu-bindings.json`）。`cordis.patch.yml` 的 `envFile` 解析顺序：`FSCHANNEL_ENV_FILE` 环境变量（由 `scripts/restart-dsh.ps1` 从 .env 导出）→ `<cwd>/.env`。
 
 ---
 

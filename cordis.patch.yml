@@ -10,7 +10,7 @@
 # half (exports["./client"]) renders the Feishu UI. Config keys:
 #   envFile        path to a .env holding PATH config (FSCHANNEL_* keys); no
 #                  longer used for credentials. Resolved as: FSCHANNEL_ENV_FILE
-#                  env var (set by scripts/restart-web.ps1 from the .env file)
+#                  env var (set by scripts/restart-dsh.ps1 from the .env file)
 #                  -> <cwd>/.env
 #   appId/appSecret direct credential overrides; otherwise credentials come
 #                  from the DSH credential store ($DSH_HOME/.credentials.yaml,

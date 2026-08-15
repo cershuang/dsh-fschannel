@@ -91,7 +91,7 @@ The `feishu-bot` entry (from the bundled `cordis.patch.yml`, applied automatical
 
 Credential precedence: plugin config `appId/appSecret` > credential service (shell-exported env > DSH credential store `$DSH_HOME/.credentials.yaml` > project `.env` > `~/.dsh/.env`) > plugin `envFile`. **Recommended**: fill in appId/appSecret on the settings page "飞书机器人 → 连接凭据", saved to the credential store (appId shown masked, secret never echoed; don't put credentials in `.env`).
 
-**Path config (in `.env`, not committed)**: `FSCHANNEL_REPO` (plugin repo root, used by scripts/restarts), `FSCHANNEL_ENV_FILE` (.env's own path, defaults to the working directory), `FSCHANNEL_BINDINGS_FILE` (binding data file, defaults to `$DSH_HOME/feishu-bindings.json`). `cordis.patch.yml`'s `envFile` resolution: `FSCHANNEL_ENV_FILE` env var (exported by `scripts/restart-web.ps1` from .env) → `<cwd>/.env`.
+**Path config (in `.env`, not committed)**: `FSCHANNEL_REPO` (plugin repo root, used by scripts/restarts), `FSCHANNEL_ENV_FILE` (.env's own path, defaults to the working directory), `FSCHANNEL_BINDINGS_FILE` (binding data file, defaults to `$DSH_HOME/feishu-bindings.json`). `cordis.patch.yml`'s `envFile` resolution: `FSCHANNEL_ENV_FILE` env var (exported by `scripts/restart-dsh.ps1` from .env) → `<cwd>/.env`.
 
 ---
 

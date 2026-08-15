@@ -5,6 +5,8 @@ lib/client.js.map
 lib/*.smoke.cjs
 lib/*-smoke.cjs
 *.log
+# Rotation target of restart-dsh.ps1; *.log does not match a .1 suffix.
+*.log.[0-9]
 .env
 
 # Vision toolkit local artifacts

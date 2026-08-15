@@ -72,6 +72,11 @@ function Log($line) {
 }
 function Flush-Log { if ($logLines.Count -gt 0) { $logLines | Out-File -Encoding utf8 $log -Append; $logLines.Clear() } }
 
+# $ErrorActionPreference is 'Stop', so any cmdlet throw would otherwise discard
+# the whole buffer — and on a detached run (this script's main use) Write-Host
+# goes nowhere, so the run would leave no trace at all.
+trap { Log ('restart-dsh: FAILED - unhandled: ' + $_.Exception.Message); Flush-Log; break }
+
 Log 'restart-dsh: starting'
 
 # ---------------------------------------------------------------------------
@@ -81,7 +86,8 @@ Log 'restart-dsh: starting'
 # Get-CimInstance Win32_Process for `CommandLine -match 'dsh'`, which is an
 # unanchored regex over the whole command line: the repo path (E:\Code\dsh),
 # every path under ~/.dsh, any editor or language server opened on the repo,
-# and the sibling restart-web.ps1 all matched, and all got Stop-Process -Force.
+# and the since-deleted sibling restart-web.ps1 all matched, and all got
+# Stop-Process -Force.
 # It was also unreliable in the other direction — CommandLine is null for
 # processes owned by other users unless elevated.
 # ---------------------------------------------------------------------------
@@ -168,26 +174,40 @@ if (-not $SkipReinstall) {
 # differ, the process we are about to start would run old code and still answer
 # ok:true on /feishu/status.
 # ---------------------------------------------------------------------------
-function Get-LibManifest([string]$root) {
+# Hash everything the package actually ships, not just lib/*.js. The installed
+# copy also carries cordis.patch.yml (the loader entry) and package.json
+# (dsh.client.inject) — editing either used to pass this check and boot the old
+# configuration, which is the exact false green the check exists to prevent.
+$VerifiedFiles = @('cordis.patch.yml', 'package.json')
+
+function Get-InstallManifest([string]$root) {
   $dir = Join-Path $root 'lib'
   if (-not (Test-Path $dir)) { return $null }
-  $parts = Get-ChildItem $dir -Filter *.js -File | Sort-Object Name | ForEach-Object {
-    $_.Name + ':' + (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+  $parts = @(Get-ChildItem $dir -Filter *.js -File | Sort-Object Name | ForEach-Object {
+    'lib/' + $_.Name + ':' + (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+  })
+  foreach ($name in $VerifiedFiles) {
+    $path = Join-Path $root $name
+    # Absent on both sides is a match; absent on one side is a mismatch.
+    $parts += $name + ':' + $(if (Test-Path $path) { (Get-FileHash $path -Algorithm SHA256).Hash } else { 'ABSENT' })
   }
   return ($parts -join "`n")
 }
 
-$repoManifest = Get-LibManifest $repo
-$installedManifest = Get-LibManifest $installed
+$repoManifest = Get-InstallManifest $repo
+$installedManifest = Get-InstallManifest $installed
 if ($null -eq $installedManifest) {
   Log ('restart-dsh: FAILED - no installed copy at ' + $installed)
   Flush-Log
   exit 1
 }
 if ($repoManifest -ne $installedManifest) {
-  Log 'restart-dsh: FAILED - installed copy does not match the repo (lib/ hashes differ)'
-  Log ('restart-dsh:   repo      ' + (Join-Path $repo 'lib'))
-  Log ('restart-dsh:   installed ' + (Join-Path $installed 'lib'))
+  Log 'restart-dsh: FAILED - installed copy does not match the repo (hashes differ)'
+  Log ('restart-dsh:   repo      ' + $repo)
+  Log ('restart-dsh:   installed ' + $installed)
+  foreach ($line in (Compare-Object ($repoManifest -split "`n") ($installedManifest -split "`n") | Select-Object -First 6)) {
+    Log ('restart-dsh:   ' + $line.SideIndicator + ' ' + $line.InputObject)
+  }
   Log 'restart-dsh:   re-run without -SkipReinstall, or check that plugin add succeeded'
   Flush-Log
   exit 1
