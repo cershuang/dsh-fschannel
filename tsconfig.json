@@ -1,0 +1,18 @@
+{
+  "// intent": "Type gate only — no build. `checkJs: false` keeps the checked set exactly the files that opt in with `// @ts-check`, which today is the nine hand-written lib/*.js plus scripts/build-client.mjs. The other scripts and the browser half fall out of scope with no exclude list, and gain checking the day they add the pragma.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["lib/**/*.js", "scripts/**/*.mjs"],
+  "exclude": ["node_modules", "lib/client.js"]
+}
