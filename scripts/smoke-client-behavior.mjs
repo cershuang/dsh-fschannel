@@ -49,18 +49,53 @@ const useMemo = (factory, deps) => {
   if (stale) { slot.value = factory(); slot.deps = deps }
   return slot.value
 }
-const resetState = () => { stateSlots = []; renderPass = 0; cleanups = [] }
+/**
+ * Start a fresh component instance. Cleanups are RUN, not dropped: discarding
+ * them left every scenario's bus listener registered, each closing over state
+ * slots that had already been orphaned. Harmless only while nothing broadcast —
+ * the moment a test asserts on a broadcast, the stale listeners make the counts
+ * meaningless.
+ */
+const resetState = () => { unmount(); stateSlots = []; renderPass = 0 }
 const reRender = () => { renderPass = 0 }
 const unmount = () => { while (cleanups.length > 0) { const fn = cleanups.pop(); if (typeof fn === 'function') fn() } }
+
+/**
+ * Slot-based useEffect that honours the dependency array.
+ *
+ * The previous mock ran every effect on every render and never invoked a
+ * cleanup between renders. That made the poll assertion prove nothing — it
+ * passed identically with deps of [], [phase], [refresh] or none at all — and
+ * rendering twice armed two intervals and added two bus listeners, so a
+ * regression that duplicated either would go unnoticed.
+ */
+const useEffect = (cb, deps) => {
+  if (renderPass >= stateSlots.length) stateSlots.push({ deps: undefined, cleanup: undefined })
+  const slot = stateSlots[renderPass]
+  renderPass += 1
+  const stale = slot.deps === undefined || deps === undefined
+    || deps.length !== slot.deps.length || deps.some((d, i) => d !== slot.deps[i])
+  if (!stale) return
+  if (typeof slot.cleanup === 'function') {
+    const index = cleanups.indexOf(slot.cleanup)
+    if (index !== -1) cleanups.splice(index, 1)
+    slot.cleanup()
+  }
+  slot.deps = deps
+  const cleanup = cb()
+  slot.cleanup = typeof cleanup === 'function' ? cleanup : undefined
+  if (slot.cleanup !== undefined) cleanups.push(slot.cleanup)
+}
 
 const fakeReact = {
   createElement: (type, props, ...children) => ({ type, props, children }),
   Fragment: Symbol('fragment'),
   useState,
-  // Unlike the other suites, keep the cleanup so unsubscribe and clearInterval
-  // are observable at all.
-  useEffect: (cb) => { const c = cb(); if (typeof c === 'function') cleanups.push(c) },
-  useCallback: (fn) => fn,
+  useEffect,
+  // useCallback must memoize, or every render hands out a new function
+  // identity and every dependent effect re-runs — which is how a "one refresh
+  // per mutation" assertion silently became three.
+  useCallback: (fn, deps) => useMemo(() => fn, deps),
   useMemo,
 }
 
@@ -253,6 +288,15 @@ fetchCalls = []
 poll.fn()
 await settle()
 if (!fetchCalls.some((call) => call.url.includes('/status'))) throw new Error('poll tick did not re-read status')
+
+// Re-rendering the same instance must NOT arm a second interval. With a mock
+// that ignored dependency arrays this was invisible: two renders armed two
+// timers, timers.find() inspected only the first, and unmount() ran both
+// cleanups — so the assertion below passed no matter what.
+reRender()
+FeishuSeat({ sessionId: 'sess-1', t })
+const intervals = timers.filter((timer) => timer.kind === 'interval')
+if (intervals.length !== 1) throw new Error('re-render armed ' + intervals.length + ' intervals; expected 1')
 
 unmount()
 if (!poll.cleared) throw new Error('poll timer not cleared on unmount')
