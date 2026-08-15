@@ -21,6 +21,13 @@
 #   reactDone      emoji when the turn completes (default DONE)
 #   reactError     emoji when the turn fails (default SAD)
 #   hintUnbound    reply guidance to chats that are not bound (default true)
+#   holdImages      stage Feishu images and combine them with the NEXT text
+#                  message (vision-tools recognition; default true)
+#   holdHint        acknowledge image-only messages (default true)
+#   maxHeldImages   staged images per chat (default 10)
+#   maxHeldImageBytes  per-image limit (default 10 MiB)
+#   holdTtlMs       drop staged images after N ms without text (0 = keep)
+#   imageDir        staging directory override (default <session cwd>/.dsh-fschannel-images)
 #   bindingsFile   durable binding store path (default $DSH_HOME/feishu-bindings.json;
 #                  override via FSCHANNEL_BINDINGS_FILE in .env)
 

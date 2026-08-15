@@ -18,6 +18,7 @@
 - `output: 'plain'` 可切换为「每步一条 markdown 消息」
 - **队列处理**：SDK 级去重（30s）+ 按聊天串行投递；Agent 忙碌时回复「前面还有 N 条消息在排队」
 - **表情反馈**：收到消息时在消息上自动加 👍，该回合完成变 ✅、失败变 ☹️（可配置 emoji 与开关；仅在你自己的消息上生效，Web 触发的回合不会误换）
+- **图片暂存识别**：飞书图片先暂存不处理，等你的下一条文字消息到达后，把图片路径连同识别指令一起发给 agent —— agent 加载 vision-tools 技能并调用视觉识别工具（vision_glance/vision_ocr 等）逐张识别，结合文字回答（需已安装 @anionex/dsh-vision-toolkit 且 runtime 就绪；图片保存在会话工作区的 `.dsh-fschannel-images/`）
 - 群聊默认仅响应 @ 机器人（`requireMention`）；未绑定聊天收到引导提示（可关）
 
 ### 飞书侧模型控制
@@ -74,6 +75,12 @@ dsh web
 | `ackInbound` | `false` | 空闲时也回复「收到，处理中…」 |
 | `reactInbound` | `true` | 收到消息时加表情反馈（👍→✅/☹️） |
 | `reactReceived` / `reactDone` / `reactError` | `THUMBSUP` / `DONE` / `SAD` | 各阶段表情（飞书标准 emoji_type，可自定义） |
+| `holdImages` | `true` | 暂存飞书图片，随下一条文字一起识别 |
+| `holdHint` | `true` | 纯图片消息回「已收到 N 张图片…」提示 |
+| `maxHeldImages` | `10` | 每个聊天暂存图片上限 |
+| `maxHeldImageBytes` | `10 MiB` | 单张图片大小上限 |
+| `holdTtlMs` | `0` | 暂存过期时间（毫秒，0=不过期） |
+| `imageDir` | `<cwd>/.dsh-fschannel-images` | 暂存目录（须在会话工作区内） |
 | `hintUnbound` | `true` | 未绑定聊天回复引导提示 |
 | `hintText` | 内置 | 自定义引导文案 |
 | `bindingsFile` | `$DSH_HOME/feishu-bindings.json` | 绑定持久化路径 |
