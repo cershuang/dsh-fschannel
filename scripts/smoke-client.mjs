@@ -56,6 +56,12 @@ const ctx = {
     inject(name, cb) { const opts = cb(); registered.push(opts) },
     register: (opts) => { registered.push(opts); return () => {} },
   },
+  get(name) {
+    if (name === 'conversationEvents') {
+      return { register: (def) => { registered.push({ name: 'conversationEvents.register', kind: def.kind }) } }
+    }
+    return undefined
+  },
 }
 exportsObj.apply(ctx)
 const names = registered.map((o) => o.name).join(',')
@@ -63,6 +69,10 @@ console.log('registered slots:', names)
 if (!names.includes('conversation.session.header.actions') || !names.includes('settings.section')) {
   throw new Error('slot registration missing')
 }
+const nodeOpts = registered.find((o) => o.name === 'conversation.chat.node')
+if (nodeOpts === undefined || nodeOpts.key !== 'feishu-image') throw new Error('image node slot missing')
+const defReg = registered.find((o) => o.name === 'conversationEvents.register')
+if (defReg === undefined || defReg.kind !== 'feishu-image') throw new Error('image node definition missing')
 const settingsOpts = registered.find((o) => o.name === 'settings.section')
 if (typeof settingsOpts.label !== 'function') throw new Error('section label missing')
 const injected = settingsOpts.inject()
