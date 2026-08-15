@@ -955,6 +955,8 @@ function apply(ctx) {
     return () => {
       stop()
       ctx.off('connection/reset', onReset)
+      // The 60s disarm timer outlives disposal otherwise.
+      clearStage()
     }
   }, 'dsh-fschannel: auto-bind new sessions')
 
@@ -988,7 +990,9 @@ function apply(ctx) {
         h('div', { style: { marginTop: 4, fontSize: 12, color: 'var(--dsw-alias-label-tertiary, #999)' } }, caption),
       )
     }
-    conversationEvents.register(feishuImageDefinition)
+    // register() returns an idempotent disposer; route it through ctx.effect
+    // so the definition is unregistered on dispose/HMR, like the slot below.
+    ctx.effect(() => conversationEvents.register(feishuImageDefinition), 'dsh-fschannel: image node definition')
     ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
       name: 'conversation.chat.node',
       key: 'feishu-image',

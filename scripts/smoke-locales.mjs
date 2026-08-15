@@ -20,11 +20,21 @@ for (const key of zhKeys) {
   if (zhPh !== enPh) throw new Error(`placeholder mismatch in "${key}": zh(${zhPh}) vs en(${enPh})`)
 }
 
-// dictFor: 'en' -> en, everything else -> zh (fallback semantics).
-if (dictFor('en') !== en) throw new Error('dictFor(en) must return en')
+// dictFor: 'en' -> the en copy layered over zh, everything else -> zh.
+const enDict = dictFor('en')
+for (const key of enKeys) {
+  if (enDict[key] !== en[key]) throw new Error(`dictFor(en) must expose the en copy for "${key}"`)
+}
 if (dictFor('zh') !== zh) throw new Error('dictFor(zh) must return zh')
 if (dictFor(undefined) !== zh) throw new Error('dictFor(undefined) must fall back to zh')
 if (dictFor('fr') !== zh) throw new Error('dictFor(unknown) must fall back to zh')
+
+// A key added to zh but forgotten in en must fall back to the zh copy rather
+// than resolve to undefined — fill(undefined, …) throws inside a handler.
+// Key parity above makes this unreachable today; it guards the next edit.
+for (const key of zhKeys) {
+  if (typeof enDict[key] !== 'string' || enDict[key] === '') throw new Error(`dictFor(en)["${key}"] must not be empty`)
+}
 
 // All zh values are non-empty strings (no accidental empty copy).
 for (const key of zhKeys) {

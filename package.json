@@ -22,7 +22,8 @@
   ],
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "watch": "node scripts/build-client.mjs --watch"
+    "watch": "node scripts/build-client.mjs --watch",
+    "prepack": "node scripts/build-client.mjs"
   },
   "dependencies": {
     "@larksuite/channel": "^0.4.1"
