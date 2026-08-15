@@ -1173,7 +1173,15 @@ function apply(ctx) {
 
     useEffect(() => {
       void refresh()
-      return () => { gate.close() }
+      // Subscribe like the other two surfaces. Without this the gallery was a
+      // counterexample to the bus's own promise that every mounted surface
+      // re-reads: count === 0 hides the button entirely, so the first Feishu
+      // image of a session left it hidden, and onOpen's "re-fetch so a
+      // just-received image appears" was unreachable — there was no button to
+      // click. Only switching sessions and back revealed it.
+      const listener = () => { void refresh() }
+      refreshBus.add(listener)
+      return () => { refreshBus.delete(listener); gate.close() }
     }, [refresh, gate])
 
     const onOpen = () => {

@@ -402,4 +402,34 @@ if (!poll.cleared) throw new Error('poll timer not cleared on unmount')
   if (statusReads < 2) throw new Error('the other surface did not refresh: ' + statusReads + ' status reads')
 }
 
+// ── the gallery re-reads on a broadcast ───────────────────────────────────
+// It used to subscribe to nothing, and count === 0 hides the button entirely —
+// so the first image of a session left it hidden, and onOpen's re-fetch was
+// unreachable because there was no button to click.
+{
+  resetInstances()
+  installFetch()
+  const Gallery = registered.find((opts) => opts && opts.id === 'feishu-images').view
+  const Seat = registered.find((opts) => opts && opts.id === 'feishu-bind').view
+
+  useInstance('gallery')
+  Gallery({ sessionId: 'sess-g', t: (k) => k })
+  await settle()
+  useInstance('seat')
+  Seat({ sessionId: 'sess-g', t: (k) => k })
+  await settle()
+
+  fetchCalls = []
+  useInstance('seat')
+  const view = Seat({ sessionId: 'sess-g', t: (k) => k })
+  const chip = walk(view).find((n) => typeof n === 'object' && n.props && typeof n.props.onClick === 'function')
+  chip.props.onClick()
+  await settle()
+  await settle()
+
+  if (!fetchCalls.some((c) => c.url.includes('/images/'))) {
+    throw new Error('the gallery did not re-read on a broadcast')
+  }
+}
+
 console.log('CLIENT BEHAVIOR SMOKE OK (locale reporting, dictionary parity, api failures, pending poll)')
