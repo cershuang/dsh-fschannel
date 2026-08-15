@@ -15,9 +15,9 @@
   },
   "files": [
     "lib",
-    "src",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "LICENSE"
   ],
   "scripts": {
@@ -54,7 +54,25 @@
     }
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": ">=22.19.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cershuang/dsh-fschannel.git"
+  },
+  "homepage": "https://github.com/cershuang/dsh-fschannel#readme",
+  "bugs": {
+    "url": "https://github.com/cershuang/dsh-fschannel/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "dsh",
+    "feishu",
+    "lark",
+    "cordis",
+    "bot",
+    "chatops"
+  ],
+  "author": "CersHuang",
   "license": "MIT"
 }

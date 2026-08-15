@@ -7,7 +7,12 @@ import { homedir } from 'node:os'
 import { decodeFrames } from '../lib/repair.js'
 import { readFileSync } from 'node:fs'
 
-const sessionsRoot = join(homedir(), '.dsh', 'sessions')
+// Honour DSH_HOME like the plugin does (lib/index.js), instead of assuming
+// the default location — otherwise this audits the wrong tree entirely.
+const dshHome = process.env.DSH_HOME !== undefined && process.env.DSH_HOME !== ''
+  ? process.env.DSH_HOME
+  : join(homedir(), '.dsh')
+const sessionsRoot = join(dshHome, 'sessions')
 const broken = []
 let scanned = 0
 for (const project of readdirSync(sessionsRoot, { withFileTypes: true })) {

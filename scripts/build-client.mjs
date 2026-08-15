@@ -24,6 +24,11 @@ const options = {
   external: ['react'],
   outfile,
   sourcemap: true,
+  // Do not inline the entry source into the map. It made the map a second
+  // copy of src/client/index.jsx, and since `src` is no longer published the
+  // package was carrying that source twice over. Line mappings survive; a
+  // developer debugging locally still has the real file on disk.
+  sourcesContent: false,
   logLevel: 'info',
 }
 

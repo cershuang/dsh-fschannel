@@ -12,6 +12,8 @@ const require = createRequire(import.meta.url)
 const bundlePath = fileURLToPath(new URL('../lib/client.js', import.meta.url))
 const copyPath = fileURLToPath(new URL('../lib/client.settings-smoke.cjs', import.meta.url))
 copyFileSync(bundlePath, copyPath)
+// Clean up however this script ends; the trailing rmSync only ran on success.
+process.on('exit', () => { rmSync(copyPath, { force: true }) })
 
 let captured = null
 globalThis.window = { __ModuleLoader__: { load(handoff) { captured = handoff } } }
@@ -188,5 +190,4 @@ const nodes3 = walk(v3)
 if (!nodes3.some((n) => n === 'thChatId')) throw new Error('table header missing with pending only')
 if (!nodes3.some((n) => n === 'session-9')) throw new Error('pending session cell missing')
 
-rmSync(copyPath, { force: true })
 console.log('SETTINGS RENDER SMOKE OK')

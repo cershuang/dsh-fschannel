@@ -41,7 +41,7 @@
 
 ## 安装方式
 
-前置：Node 22+，已安装 `dsh` CLI 与 `pnpm`（`npm i -g @deepseek-ai/dsh pnpm`）。
+前置：Node 22.19+，已安装 `dsh` CLI 与 `pnpm`（`npm i -g @deepseek-ai/dsh pnpm`）。
 
 ```sh
 # 1. 准备环境（.env 只放路径配置；凭据在启动后于设置页填写）
@@ -152,19 +152,34 @@ dsh web
 ## 开发
 
 ```sh
+npm test             # 门禁：lint + 构建 + 全部 10 个离线冒烟（提交前跑这个）
+npm run lint         # 仅静态检查（no-undef —— 漏写 import 只有它能拦住）
 npm run build        # esbuild 构建客户端 bundle (lib/client.js)
 npm run watch        # 监听重建
-# 注意：pnpm 的 file: 协议会按锁存复用 store 条目，重装前先删掉 profile 里的旧条目，
-# 否则服务端继续提供旧 bundle：
+
+# 改完代码要生效，必须重装进 profile —— dsh 是把插件**复制**进
+# ~/.dsh/profiles/web/node_modules/dsh-fschannel 的，改仓库文件本身没有任何效果。
+# 而且 pnpm 按 (路径, 版本号) 复用 store 条目，只 add 一次不会覆盖，必须 remove + add。
+# scripts/restart-dsh.ps1 已经把这一串串起来，并在启动前比对 lib/*.js 的哈希，
+# 不一致直接失败而不是打出 UP —— 手动做等价于：
+#   npm run build
 #   dsh plugin --profile web remove dsh-fschannel
-#   删除 ~/.dsh/profiles/web/node_modules/.pnpm 下的 dsh-fschannel@file+* 目录
 #   dsh plugin --profile web add file:<插件仓库路径>
+
+# 单独跑某个冒烟（npm test 会全部跑一遍）：
 node scripts/smoke-test.mjs     # 服务端冒烟（env/绑定/持久化）
+node scripts/smoke-env-example.mjs      # example.env 不得含凭据
+node scripts/smoke-locales.mjs  # zh/en 字典键与占位符对齐
 node scripts/smoke-client.mjs   # 客户端 bundle 冒烟
 node scripts/smoke-settings-render.mjs  # 设置页渲染冒烟（绑定表格 + 排版）
 node scripts/smoke-cards.mjs    # 模型卡片与触发词测试
+node scripts/smoke-render.mjs   # markdown 分段与结果卡片渲染
+node scripts/smoke-stream.mjs   # 流式卡片缓冲与失败回退
+node scripts/smoke-images.mjs   # 图片校验、暂存与提示语组装
 node scripts/smoke-repair.mjs   # 会话日志修复（feishu/image ignorable 标记 + seq 冲突）
-node scripts/audit-sessions.mjs # 全量审计所有会话日志的 seq 连续性
+
+# 需要真实环境，不在 npm test 内：
+node scripts/audit-sessions.mjs # 全量审计所有会话日志的 seq 连续性（需真实 $DSH_HOME）
 node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock apiProxy）
 ```
 
@@ -177,6 +192,10 @@ node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock ap
 - `lib/stream.js` — 流式卡片（缓冲 + 失败回退）
 - `lib/bindings.js` — 绑定存储（JSON 原子写，含会话级模型路由）
 - `lib/env.js` — .env 解析（路径配置）+ 凭据分层解析（凭据服务 > envFile）
+- `lib/images.js` — 图片类型表、校验、暂存缓冲与提示语组装
+- `lib/render.js` — markdown 分段与最终结果卡片渲染
+- `lib/repair.js` — 历史会话日志修复（zstd 帧解码、外来事件、seq 冲突）
+- `lib/locales.js` — 飞书侧文案（zh/en，跟随宿主语言）
 - `src/client/index.jsx` → `lib/client.js` — 浏览器端：会话头 chip + 设置行
 
 ---

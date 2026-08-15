@@ -41,7 +41,7 @@ The transport layer uses the official Feishu [@larksuite/channel](https://github
 
 ## Installation
 
-Prerequisites: Node 22+, `dsh` CLI and `pnpm` installed (`npm i -g @deepseek-ai/dsh pnpm`).
+Prerequisites: Node 22.19+, `dsh` CLI and `pnpm` installed (`npm i -g @deepseek-ai/dsh pnpm`).
 
 ```sh
 # 1. Prepare the environment (.env holds path config only; credentials go to
@@ -153,19 +153,35 @@ No internal dsh package files are modified; no re-patching is needed after an up
 ## Development
 
 ```sh
+npm test             # the gate: lint + build + all 10 offline smokes (run before committing)
+npm run lint         # static check only (no-undef — the only thing that catches a missing import)
 npm run build        # esbuild builds the client bundle (lib/client.js)
 npm run watch        # rebuild on change
-# Note: pnpm's file: protocol reuses store entries by lock; remove the old
-# profile entry before reinstalling, or the server keeps serving the old bundle:
+
+# Code changes do NOT take effect until the plugin is reinstalled: dsh COPIES it
+# into ~/.dsh/profiles/web/node_modules/dsh-fschannel, so editing repo files alone
+# does nothing. pnpm also keys its file: store entry on (path, version), so a lone
+# `add` reuses the stale entry — remove + add is required.
+# scripts/restart-dsh.ps1 chains all of this and compares lib/*.js hashes before
+# launching, failing instead of logging UP. By hand it is:
+#   npm run build
 #   dsh plugin --profile web remove dsh-fschannel
-#   delete the dsh-fschannel@file+* directory under ~/.dsh/profiles/web/node_modules/.pnpm
 #   dsh plugin --profile web add file:<plugin-repo-path>
+
+# Individual suites (npm test runs them all):
 node scripts/smoke-test.mjs     # server-side smoke (env/bindings/persistence)
+node scripts/smoke-env-example.mjs      # example.env must not carry credentials
+node scripts/smoke-locales.mjs  # zh/en dictionary key and placeholder parity
 node scripts/smoke-client.mjs   # client bundle smoke
 node scripts/smoke-settings-render.mjs  # settings-page render smoke (bindings table + layout)
 node scripts/smoke-cards.mjs    # model card & trigger tests
+node scripts/smoke-render.mjs   # markdown segmentation and result-card rendering
+node scripts/smoke-stream.mjs   # streaming card buffering and failure fallback
+node scripts/smoke-images.mjs   # image validation, staging and note composition
 node scripts/smoke-repair.mjs   # session-log repair (feishu/image ignorable + seq conflicts)
-node scripts/audit-sessions.mjs # audit all session logs for seq continuity
+
+# Need a real environment; excluded from npm test:
+node scripts/audit-sessions.mjs # audit all session logs for seq continuity (needs a real $DSH_HOME)
 node scripts/integration-test.mjs  # integration test (real Feishu connection + mock apiProxy)
 ```
 
@@ -178,6 +194,9 @@ node scripts/integration-test.mjs  # integration test (real Feishu connection + 
 - `lib/stream.js` — streaming cards (buffering + failure fallback)
 - `lib/bindings.js` — binding store (atomic JSON writes, per-session model route)
 - `lib/env.js` — .env parsing (path config) + layered credential resolution (credential service > envFile)
+- `lib/images.js` — image type table, validation, hold buffer and note composition
+- `lib/render.js` — markdown segmentation and final result-card rendering
+- `lib/repair.js` — historical session-log repair (zstd frame decoding, foreign events, seq conflicts)
 - `lib/locales.js` — Feishu-facing copy (zh/en, follows the host locale)
 - `src/client/index.jsx` → `lib/client.js` — browser side: session-header chip + settings page
 

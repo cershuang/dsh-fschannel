@@ -7,6 +7,10 @@ const require = createRequire(import.meta.url)
 const bundlePath = fileURLToPath(new URL('../lib/client.js', import.meta.url))
 const copyPath = fileURLToPath(new URL('../lib/client.smoke.cjs', import.meta.url))
 copyFileSync(bundlePath, copyPath)
+// Clean up however this script ends. The old trailing rmSync only ran on the
+// success path, so any failure left an untracked CJS copy of the bundle in
+// lib/ — which `files: ["lib"]` would happily publish.
+process.on('exit', () => { rmSync(copyPath, { force: true }) })
 
 let captured = null
 globalThis.window = {
@@ -80,5 +84,4 @@ const injected = settingsOpts.inject()
 if (typeof injected.createSession !== 'function') throw new Error('createSession prop missing')
 await injected.createSession()
 if (startSessionCalls !== 1) throw new Error('startSession not called')
-rmSync(copyPath, { force: true })
 console.log('CLIENT SMOKE OK')
