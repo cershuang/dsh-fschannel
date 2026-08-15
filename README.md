@@ -19,6 +19,7 @@
 - **队列处理**：SDK 级去重（30s）+ 按聊天串行投递；Agent 忙碌时回复「前面还有 N 条消息在排队」
 - **表情反馈**：收到消息时在消息上自动加 👍，该回合完成变 ✅、失败变 ☹️（可配置 emoji 与开关；仅在你自己的消息上生效，Web 触发的回合不会误换）
 - **图片暂存识别**：飞书图片先暂存不处理，等你的下一条文字消息到达后，把图片路径连同识别指令一起发给 agent —— agent 加载 vision-tools 技能并调用视觉识别工具（vision_glance/vision_ocr 等）逐张识别，结合文字回答（需已安装 @anionex/dsh-vision-toolkit 且 runtime 就绪；图片保存在会话工作区的 `.dsh-fschannel-images/`）
+- **会话图片画廊**：会话头部「飞书图片」按钮打开该会话的图片网格（点击查看原图）。图片元数据由插件自管（`feishu-bindings.json`），**不再写入会话日志** —— 旧版本写入的 `feishu/image` 事件类型不为 harness 所知，会导致整个会话历史无法加载；v0.1.5.3 起插件在启动时自动修复历史日志（给这类事件补上 harness 认可的 `ignorable` 标记），并自动补录历史图片索引
 - 群聊默认仅响应 @ 机器人（`requireMention`）；未绑定聊天收到引导提示（可关）
 
 ### 飞书侧模型控制
@@ -158,7 +159,9 @@ npm run watch        # 监听重建
 #   dsh plugin --profile web add file:E:/Code/dsh
 node scripts/smoke-test.mjs     # 服务端冒烟（env/绑定/持久化）
 node scripts/smoke-client.mjs   # 客户端 bundle 冒烟
+node scripts/smoke-settings-render.mjs  # 设置页渲染冒烟（绑定表格 + 排版）
 node scripts/smoke-cards.mjs    # 模型卡片与触发词测试
+node scripts/smoke-repair.mjs   # 会话日志修复（feishu/image ignorable 标记）
 node scripts/integration-test.mjs  # 集成测试（真实连接飞书 + mock apiProxy）
 ```
 
