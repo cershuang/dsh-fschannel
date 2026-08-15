@@ -1,5 +1,6 @@
 // Card module unit test.
 import { buildModelCard, parseActionValue, effortOptions, MODEL_CARD_INTENT, isBareKeyword } from '../lib/cards.js'
+import { zh } from '../lib/locales.js'
 
 const current = { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high' }
 const groups = [{
@@ -11,7 +12,7 @@ const groups = [{
   ],
 }]
 
-const card = buildModelCard({ sessionId: 'sess-1', current, groups })
+const card = buildModelCard({ sessionId: 'sess-1', current, groups, dict: zh })
 if (card.header.template !== 'blue') throw new Error('header')
 const [modelRow, effortRow] = card.elements.filter((e) => e.tag === 'action')
 if (modelRow.actions.length !== 2) throw new Error('model buttons: ' + modelRow.actions.length)
