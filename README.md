@@ -1,5 +1,7 @@
 # dsh-fschannel
 
+[English](README.en.md) | **中文**
+
 让 DeepSeek Harness Web 会话连接到飞书机器人：**新建会话时选择「连接飞书」**，之后在飞书里给机器人发消息，消息进入该 DSH 会话由 Agent 处理，回复自动发回飞书聊天。Web 与飞书可同时驱动同一个会话。
 
 传输层使用飞书官方 [@larksuite/channel](https://github.com/larksuite/channel-sdk-node) SDK —— **WebSocket 长连接，无需公网回调地址**。
